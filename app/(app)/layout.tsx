@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { MobileNav } from "@/components/mobile-nav";
 import { createClient } from "@/utils/supabase/server";
+import { getActiveCampaign } from "@/lib/campaign";
 
 export default async function AppLayout({
   children,
@@ -15,6 +16,10 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // No active campaign → send the user to the picker first.
+  const activeCampaign = await getActiveCampaign();
+  if (!activeCampaign) redirect("/select");
+
   const { data: membership } = await supabase
     .from("memberships")
     .select("role")
@@ -24,7 +29,7 @@ export default async function AppLayout({
 
   return (
     <div className="app density-cozy">
-      <Sidebar role={role} email={user.email ?? ""} />
+      <Sidebar role={role} email={user.email ?? ""} activeCampaign={activeCampaign.candidate} />
       <Topbar />
       <main className="canvas">{children}</main>
       <MobileNav role={role} />

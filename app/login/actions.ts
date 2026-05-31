@@ -1,8 +1,10 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { CAMPAIGN_COOKIE } from "@/lib/campaign";
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -10,7 +12,7 @@ export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
-  redirect("/");
+  redirect("/select");
 }
 
 export async function signUp(formData: FormData) {
@@ -31,11 +33,13 @@ export async function signUp(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
-  redirect("/");
+  redirect("/select");
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  const c = await cookies();
+  c.delete(CAMPAIGN_COOKIE);
   redirect("/login");
 }

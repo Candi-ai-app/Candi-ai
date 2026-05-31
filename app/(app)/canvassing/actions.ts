@@ -1,8 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-
-const CAMPAIGN_ID = "00000000-0000-0000-0000-000000000010"; // demo: Reyes campaign
+import { getActiveCampaignId } from "@/lib/campaign";
 
 export type GeoPolygon = { type: "Polygon"; coordinates: number[][][] };
 
@@ -16,8 +15,10 @@ export type SavedTurf = {
 };
 
 export async function listTurfs(): Promise<SavedTurf[]> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return [];
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_turfs", { p_campaign: CAMPAIGN_ID });
+  const { data, error } = await supabase.rpc("list_turfs", { p_campaign: campaignId });
   if (error) {
     console.error("listTurfs:", error.message);
     return [];
@@ -26,9 +27,11 @@ export async function listTurfs(): Promise<SavedTurf[]> {
 }
 
 export async function saveTurf(geometry: GeoPolygon): Promise<{ ok: boolean }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false };
   const supabase = await createClient();
   const { error } = await supabase.rpc("create_turf", {
-    p_campaign: CAMPAIGN_ID,
+    p_campaign: campaignId,
     p_geojson: geometry,
   });
   if (error) {

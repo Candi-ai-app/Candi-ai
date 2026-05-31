@@ -9,7 +9,15 @@ import { signOut } from "@/app/login/actions";
 // Canvassers get the field-focused subset; owners/directors see everything.
 const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/texting"]);
 
-export function Sidebar({ role = "director", email = "" }: { role?: string; email?: string }) {
+export function Sidebar({
+  role = "director",
+  email = "",
+  activeCampaign = "",
+}: {
+  role?: string;
+  email?: string;
+  activeCampaign?: string;
+}) {
   const pathname = usePathname();
   const isCanvasser = role === "canvasser";
   const nav = isCanvasser ? PRIMARY_NAV.filter((i) => CANVASSER_HREFS.has(i.href)) : PRIMARY_NAV;
@@ -24,6 +32,18 @@ export function Sidebar({ role = "director", email = "" }: { role?: string; emai
           Candi <small>v1·MVP</small>
         </div>
       </div>
+
+      {activeCampaign && (
+        <div className="campaign-switch">
+          <div className="campaign-switch-info">
+            <span className="campaign-switch-label">Campaign</span>
+            <b title={activeCampaign}>{activeCampaign}</b>
+          </div>
+          <Link href="/select" className="campaign-switch-link">
+            Switch
+          </Link>
+        </div>
+      )}
 
       <div className="sidebar-section">Campaign OS</div>
       <nav className="nav">

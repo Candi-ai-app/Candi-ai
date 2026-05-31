@@ -1,21 +1,23 @@
 import { VotersView } from "@/components/voters/voters-view";
 import { createClient } from "@/utils/supabase/server";
+import { getActiveCampaignId } from "@/lib/campaign";
 import type { Voter, Party } from "@/lib/mock-data";
-
-const CAMPAIGN_ID = "00000000-0000-0000-0000-000000000010"; // demo: Reyes for State Senate
 
 export const dynamic = "force-dynamic";
 
 export default async function VotersPage() {
   // RLS-scoped: returns rows only for campaigns the signed-in user is a member of.
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("voters")
-    .select(
-      "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, support, persuasion, vote_history, flags"
-    )
-    .eq("campaign_id", CAMPAIGN_ID)
-    .order("last_name", { ascending: true });
+  const campaignId = await getActiveCampaignId();
+  const { data } = campaignId
+    ? await supabase
+        .from("voters")
+        .select(
+          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, support, persuasion, vote_history, flags"
+        )
+        .eq("campaign_id", campaignId)
+        .order("last_name", { ascending: true })
+    : { data: [] };
 
   const voters: Voter[] = (data ?? []).map((r) => ({
     id: (r.external_id as string) ?? "",
