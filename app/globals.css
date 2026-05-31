@@ -1235,3 +1235,45 @@ svg.ico { display: block; }
   .vot-body  { grid-template-columns: 1fr; }
   .vot-body  > .filter-rail { display: none; }
 }
+
+/* ── Mobile / phone ──────────────────────────────────────────────────────── */
+.mobile-nav { display: none; }
+
+@media (max-width: 768px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px 1fr 58px;
+  }
+  .sidebar { display: none; }
+  .topbar { grid-column: 1; grid-row: 1 / 2; padding: 0 12px; gap: 8px; }
+  .topbar .searchbox,
+  .topbar .pill { display: none; }
+  .topbar .context-pill .muted { display: none; }
+  .canvas { grid-column: 1; grid-row: 2 / 3; }
+
+  .mobile-nav {
+    grid-column: 1; grid-row: 3 / 4;
+    display: flex; align-items: stretch;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 20;
+  }
+  .mnav-item {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    text-decoration: none; color: var(--mute-2);
+    font-size: 10px; font-weight: 500;
+  }
+  .mnav-item.active { color: var(--ink); }
+  .mnav-item.active svg { color: var(--accent-ink); }
+
+  /* single-column module bodies; give the map / table / tree explicit heights when stacked */
+  .vot-body, .turf-body, .txt-body, .scr-body { grid-template-columns: 1fr; }
+  .map-wrap { height: 56vh; min-height: 280px; }
+  .table-wrap { height: 60vh; }
+  .scr-canvas { height: 56vh; border-right: none; }
+  .module-head { flex-wrap: wrap; padding: 14px 16px 10px; }
+  .module-head h1 { font-size: 20px; }
+  .module-head .acts { width: 100%; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+}

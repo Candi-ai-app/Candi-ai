@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { MobileNav } from "@/components/mobile-nav";
 
 export default function AppLayout({
   children,
@@ -11,6 +12,7 @@ export default function AppLayout({
       <Sidebar />
       <Topbar />
       <main className="canvas">{children}</main>
+      <MobileNav />
     </div>
   );
 }
