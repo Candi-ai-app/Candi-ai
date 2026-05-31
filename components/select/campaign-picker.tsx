@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { Plus, ArrowRight, MapPin, CalendarDays } from "lucide-react";
-import { selectCampaign, createCampaign } from "@/app/select/actions";
+import { selectCampaign } from "@/app/select/actions";
 
 export type PickerCampaign = {
   id: string;
@@ -42,8 +42,6 @@ export function CampaignPicker({
   canCreate: boolean;
   email?: string;
 }) {
-  const [creating, setCreating] = useState(false);
-
   return (
     <div className="select-screen">
       <div className="select-shell">
@@ -99,51 +97,17 @@ export function CampaignPicker({
             );
           })}
 
-          {canCreate &&
-            (creating ? (
-              <form action={createCampaign} className="campaign-card campaign-card-form">
-                <div className="campaign-name" style={{ marginBottom: 4 }}>
-                  New campaign
-                </div>
-                <input
-                  className="scr-input"
-                  name="candidate"
-                  placeholder="Candidate name *"
-                  required
-                  autoFocus
-                  autoComplete="off"
-                />
-                <input className="scr-input" name="office" placeholder="Office (optional)" autoComplete="off" />
-                <input className="scr-input" name="district" placeholder="District (optional)" autoComplete="off" />
-                <label className="campaign-field-label">
-                  Election date
-                  <input className="scr-input" name="election_date" type="date" />
-                </label>
-                <div className="row" style={{ gap: 8, marginTop: 2 }}>
-                  <button type="submit" className="btn accent" style={{ flex: 1, justifyContent: "center", height: 34 }}>
-                    Create campaign
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ height: 34 }}
-                    onClick={() => setCreating(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button type="button" className="campaign-card campaign-card-new" onClick={() => setCreating(true)}>
-                <span className="campaign-new-icon">
-                  <Plus />
-                </span>
-                <span className="campaign-new-label">New campaign</span>
-                <span className="muted" style={{ fontSize: 12.5 }}>
-                  Start a fresh campaign workspace
-                </span>
-              </button>
-            ))}
+          {canCreate && (
+            <Link href="/select/new" className="campaign-card campaign-card-new">
+              <span className="campaign-new-icon">
+                <Plus />
+              </span>
+              <span className="campaign-new-label">New campaign</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>
+                Guided setup with a sample voter file
+              </span>
+            </Link>
+          )}
         </div>
       </div>
     </div>

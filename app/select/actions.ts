@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { CAMPAIGN_COOKIE } from "@/lib/campaign";
+import { findArea, stateAbbr, SAMPLE_VOTER_COUNT, type AreaCounty } from "@/lib/areas";
 
 const COOKIE_OPTS = {
   httpOnly: true as const,
@@ -32,14 +33,19 @@ export async function selectCampaign(id: string) {
   redirect("/");
 }
 
-/** Create a new campaign (owners/directors only) and make it active. */
+/**
+ * Create a new campaign (owners/directors only), seed a realistic sample voter
+ * set scoped to the chosen area, make it active, and go to the dashboard.
+ */
 export async function createCampaign(formData: FormData) {
   const candidate = String(formData.get("candidate") ?? "").trim();
   const office = String(formData.get("office") ?? "").trim();
+  const state = String(formData.get("state") ?? "").trim();
+  const county = String(formData.get("county") ?? "").trim();
   const district = String(formData.get("district") ?? "").trim();
   const electionDate = String(formData.get("election_date") ?? "").trim();
 
-  if (!candidate) redirect("/select");
+  if (!candidate) redirect("/select/new");
 
   const supabase = await createClient();
   const {
@@ -66,6 +72,8 @@ export async function createCampaign(formData: FormData) {
       candidate,
       office: office || null,
       district: district || null,
+      state: state || null,
+      county: county || null,
       election_date: electionDate || null,
     })
     .select("id")
@@ -73,10 +81,149 @@ export async function createCampaign(formData: FormData) {
 
   if (error || !created) {
     console.error("createCampaign:", error?.message);
-    redirect("/select");
+    redirect("/select/new");
+  }
+
+  const campaignId = created.id as string;
+
+  // Populate a realistic sample voter set scoped to the new campaign. The
+  // session client is RLS-scoped, but this campaign is in the user's org, so
+  // the with-check passes. Best-effort: a seeding hiccup shouldn't strand the
+  // user on /select — they still land on a (sparse) dashboard.
+  try {
+    const rows = buildSampleVoters(campaignId, state, county);
+    // Insert in batches to stay well under payload limits.
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error: insErr } = await supabase.from("voters").insert(rows.slice(i, i + 200));
+      if (insErr) {
+        console.error("createCampaign seed:", insErr.message);
+        break;
+      }
+    }
+  } catch (e) {
+    console.error("createCampaign seed threw:", e);
   }
 
   const c = await cookies();
-  c.set(CAMPAIGN_COOKIE, created.id as string, COOKIE_OPTS);
+  c.set(CAMPAIGN_COOKIE, campaignId, COOKIE_OPTS);
   redirect("/");
+}
+
+// ── Sample voter generation ───────────────────────────────────────────────────
+// Deterministic per-campaign synthetic voters using the area's bbox / precincts /
+// city, written straight into the live `voters` table. Uses ONLY the current
+// schema columns. Generation mirrors lib/mock-data.ts (seeded PRNG, party mix,
+// support/persuasion correlation, flags).
+
+const FIRST = [
+  "James", "Maria", "David", "Linda", "Andre", "Grace", "Omar", "Chloe", "Wei", "Tanya",
+  "Luis", "Nadia", "Caleb", "Ruth", "Diego", "Hana", "Isaac", "Priya", "Noah", "Zara",
+  "Elena", "Trent", "Maya", "Owen", "Layla", "Marcus", "Aaliyah", "Kenji", "Sofia", "Imani",
+];
+const LAST = [
+  "Nguyen", "Carter", "Flores", "Brooks", "Patel", "Reed", "Murphy", "Cohen", "Diaz", "Walsh",
+  "Okafor", "Romano", "Bauer", "Singh", "Hughes", "Lozano", "Foster", "Khan", "Berg", "Ali",
+  "Tucker", "Mercer", "Vance", "Ortiz", "Hale", "Henderson", "Whitfield", "Raman", "Bell", "Park",
+];
+const HISTORIES = ["100% (4/4)", "100% (4/4)", "75% (3/4)", "75% (3/4)", "50% (2/4)", "25% (1/4)", "0% (0/4)"];
+
+// Generic fallback if a campaign is created without a recognized area.
+const FALLBACK: Pick<AreaCounty, "city" | "zips" | "precincts" | "bbox" | "streets"> = {
+  city: "Springfield",
+  zips: ["00001", "00002", "00003"],
+  precincts: ["01A", "02B", "03C", "04D", "05E", "06F"],
+  bbox: [-98.6, 39.7, -98.4, 39.9],
+  streets: ["Main St", "Oak Ave", "Elm St", "Park Ave", "1st St", "Maple Dr", "Washington Ave", "Lincoln St"],
+};
+
+function mulberry32(seed: number) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Stable 32-bit hash so each campaign id seeds a distinct-but-deterministic set.
+function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+type VoterRow = {
+  campaign_id: string;
+  external_id: string;
+  first_name: string;
+  last_name: string;
+  age: number;
+  party: "D" | "R" | "I";
+  precinct: string;
+  address: string;
+  city: string;
+  state: string | null;
+  zip: string;
+  phone: string;
+  support: number;
+  persuasion: number;
+  vote_history: { label: string };
+  flags: string[];
+  geom: string; // WKT POINT — accepted by PostGIS geometry(Point,4326) on insert.
+};
+
+function buildSampleVoters(campaignId: string, stateName: string, county: string): VoterRow[] {
+  const area = findArea(stateName, county) ?? FALLBACK;
+  const abbr = stateAbbr(stateName) || null;
+  const [west, south, east, north] = area.bbox;
+  const rng = mulberry32(hashSeed(campaignId));
+  const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length)];
+
+  const out: VoterRow[] = [];
+  for (let i = 0; i < SAMPLE_VOTER_COUNT; i++) {
+    const r = rng();
+    // ≈45% D / 37% R / 18% I.
+    const party: "D" | "R" | "I" = r < 0.45 ? "D" : r < 0.82 ? "R" : "I";
+    const support = 1 + Math.floor(rng() * 5); // 1–5
+    const persuasion =
+      support === 3
+        ? 3 + Math.floor(rng() * 3)
+        : support <= 2 || support >= 5
+          ? Math.floor(rng() * 2)
+          : 1 + Math.floor(rng() * 3); // 0–5, correlated with support
+
+    const flags: string[] = [];
+    if (persuasion >= 4) flags.push("persuadable");
+    if (rng() < 0.06) flags.push("volunteer");
+    if (rng() < 0.05) flags.push("donor");
+    if (rng() < 0.07) flags.push("VBM");
+
+    const lng = west + rng() * (east - west);
+    const lat = south + rng() * (north - south);
+
+    out.push({
+      campaign_id: campaignId,
+      external_id: `S-${hashSeed(campaignId).toString(36).toUpperCase()}-${100000 + i}`,
+      first_name: pick(FIRST),
+      last_name: pick(LAST),
+      age: 18 + Math.floor(rng() * 69), // 18–86
+      party,
+      precinct: pick(area.precincts),
+      address: `${100 + Math.floor(rng() * 8900)} ${pick(area.streets)}`,
+      city: area.city,
+      state: abbr,
+      zip: pick(area.zips),
+      phone: `(555) 555-0${(100 + Math.floor(rng() * 899)).toString().padStart(3, "0")}`,
+      support,
+      persuasion,
+      vote_history: { label: pick(HISTORIES) },
+      flags,
+      geom: `SRID=4326;POINT(${lng.toFixed(6)} ${lat.toFixed(6)})`,
+    });
+  }
+  return out;
 }
