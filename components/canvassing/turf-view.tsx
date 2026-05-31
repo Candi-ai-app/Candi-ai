@@ -3,6 +3,17 @@
 import { useMemo, useState } from "react";
 import { Layers, Sparkles, Plus, Search, SlidersHorizontal, MapPin, X } from "lucide-react";
 import { TURFS, CANVASSERS, type Turf, type Canvasser } from "@/lib/mock-data";
+import dynamic from "next/dynamic";
+
+// Mapbox GL touches window/WebGL — load it client-only.
+const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m) => m.TurfMap), {
+  ssr: false,
+  loading: () => (
+    <div className="map-wrap" style={{ display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 13 }}>
+      Loading map…
+    </div>
+  ),
+});
 
 export function TurfView() {
   const [selTurf, setSelTurf] = useState<string | null>("T-12S-A");
@@ -57,27 +68,8 @@ export function TurfView() {
           })}
         </aside>
 
-        {/* ── Map ───────────────────────────────────────────────────── */}
-        <div className="map-wrap">
-          <MapCanvas selTurf={selTurf} onPick={setSelTurf} livePins={livePins} />
-          <div className="map-controls">
-            <button className="map-btn" type="button"><Plus style={{ width: 14, height: 14 }} /></button>
-            <button className="map-btn" type="button">−</button>
-            <div className="map-divider" />
-            <button className="map-btn" type="button"><MapPin style={{ width: 14, height: 14 }} /></button>
-            <button className="map-btn" type="button"><Layers style={{ width: 14, height: 14 }} /></button>
-          </div>
-          <div className="map-legend">
-            <div className="row" style={{ gap: 4 }}><span className="dot ok" /> Complete</div>
-            <div className="row" style={{ gap: 4 }}><span className="dot live" /> In progress</div>
-            <div className="row" style={{ gap: 4 }}><span className="dot" /> Queued</div>
-            <div className="row" style={{ gap: 4 }}><span style={{ width: 8, height: 2, background: "var(--accent)" }} /> AI-suggested route</div>
-          </div>
-          <div className="map-search">
-            <Search style={{ width: 14, height: 14, color: "var(--muted)" }} />
-            <input placeholder="Jump to address, precinct, ward…" />
-          </div>
-        </div>
+        {/* ── Map — real Mapbox turf cutting ────────────────────────── */}
+        <TurfMap />
 
         {/* ── Turf detail ───────────────────────────────────────────── */}
         {sel && <TurfDetail t={sel} onClose={() => setSelTurf(null)} />}
