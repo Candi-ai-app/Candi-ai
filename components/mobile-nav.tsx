@@ -12,11 +12,15 @@ const ITEMS = [
   { label: "Texts", href: "/texting", icon: MessageSquare },
 ];
 
-export function MobileNav() {
+// Canvassers get the field-focused subset; owners/directors see everything.
+const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/texting"]);
+
+export function MobileNav({ role = "director" }: { role?: string }) {
   const pathname = usePathname();
+  const items = role === "canvasser" ? ITEMS.filter((it) => CANVASSER_HREFS.has(it.href)) : ITEMS;
   return (
     <nav className="mobile-nav">
-      {ITEMS.map((it) => {
+      {items.map((it) => {
         const Icon = it.icon;
         const active = it.href === "/" ? pathname === "/" : pathname.startsWith(it.href);
         return (

@@ -6,7 +6,7 @@ import {
   Plus, SlidersHorizontal, Sparkles, Search, Send, Phone, MoreHorizontal,
   X, ChevronDown, MessageSquare, Footprints, Check as CheckIcon, Minus,
 } from "lucide-react";
-import { VOTERS, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
+import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
 
 const ROW_H = 38;
 
@@ -26,24 +26,114 @@ const COLS = [
 ] as const;
 const TOTAL_W = COLS.reduce((a, c) => a + c.w, 0);
 
+// ── filter definitions (match the campaign walkthrough) ──────────────────────
+function turnoutPct(h: string): number {
+  const frac = h.match(/(\d+)\s*\/\s*(\d+)/);
+  if (frac) { const t = parseInt(frac[2]); return t ? (parseInt(frac[1]) / t) * 100 : 0; }
+  const pct = h.match(/(\d+)\s*%/);
+  return pct ? parseInt(pct[1]) : 0;
+}
+function histCats(v: Voter): string[] {
+  const cats: string[] = [];
+  if (v.flags.includes("new")) cats.push("new");
+  if (v.history) cats.push(turnoutPct(v.history) >= 100 ? "perfect" : "skipped");
+  return cats;
+}
+const QUICKS: { k: string; label: string; ai?: boolean; match: (v: Voter) => boolean }[] = [
+  { k: "persuadable", label: "Persuadable", match: (v) => v.flags.includes("persuadable") },
+  { k: "highlow", label: "High-support · low-turnout", match: (v) => v.support >= 4 && turnoutPct(v.history) < 100 },
+  { k: "vbm", label: "VBM outstanding", match: (v) => v.flags.includes("VBM") },
+  { k: "never", label: "Never contacted", match: (v) => !v.last || v.last === "—" },
+  { k: "tier1", label: "✦ Candi recommends · Tier 1", ai: true, match: (v) => v.persuasion >= 4 },
+];
+const SUPPORT_DEFS = [
+  { v: 1, n: "Strong opp." }, { v: 2, n: "Lean opp." }, { v: 3, n: "Undecided" },
+  { v: 4, n: "Lean support" }, { v: 5, n: "Strong supp." },
+];
+const HIST_DEFS = [
+  { k: "perfect", label: "Perfect (4/4)" }, { k: "skipped", label: "Skipped 1+" }, { k: "new", label: "New voters" },
+];
+const TAG_DEFS = [
+  { k: "persuadable", label: "Persuadable", tone: "accent" },
+  { k: "volunteer", label: "Volunteer", tone: "indigo" },
+  { k: "donor", label: "Donor", tone: "amber" },
+  { k: "VBM", label: "VBM requested", tone: "teal" },
+  { k: "new", label: "New voter", tone: "" },
+];
+
+function toggleSet<T>(set: Set<T>, val: T): Set<T> {
+  const n = new Set(set);
+  if (n.has(val)) n.delete(val); else n.add(val);
+  return n;
+}
+
 export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
   const ALL = initialVoters && initialVoters.length ? initialVoters : VOTERS;
-  const [selected, setSelected] = useState<string | null>("V-014825");
+  const [selected, setSelected] = useState<string | null>(null);
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
   const [search, setSearch] = useState("");
-  const [persuadableOnly, setPersuadableOnly] = useState(false);
+  const [quick, setQuick] = useState<string | null>(null);
+  const [tagSel, setTagSel] = useState<Set<string>>(new Set());
+  const [precSel, setPrecSel] = useState<Set<string>>(new Set());
+  const [supportSel, setSupportSel] = useState<Set<number>>(new Set());
+  const [histSel, setHistSel] = useState<Set<string>>(new Set());
+  const [showFilters, setShowFilters] = useState(false); // mobile drawer
+
+  // facet options + counts, derived from the loaded voter set (live or mock)
+  const facets = useMemo(() => {
+    const partyCounts: Record<Party, number> = { D: 0, R: 0, I: 0 };
+    const precinct = new Map<string, number>();
+    const tagCounts: Record<string, number> = {};
+    const support = [0, 0, 0, 0, 0];
+    const hist: Record<string, number> = { perfect: 0, skipped: 0, new: 0 };
+    const quickCounts: Record<string, number> = {};
+    let contacted = 0;
+    for (const v of ALL) {
+      partyCounts[v.party] = (partyCounts[v.party] ?? 0) + 1;
+      if (v.precinct) precinct.set(v.precinct, (precinct.get(v.precinct) ?? 0) + 1);
+      for (const f of v.flags) tagCounts[f] = (tagCounts[f] ?? 0) + 1;
+      if (v.support >= 1 && v.support <= 5) support[v.support - 1]++;
+      for (const c of histCats(v)) hist[c] = (hist[c] ?? 0) + 1;
+      for (const Q of QUICKS) if (Q.match(v)) quickCounts[Q.k] = (quickCounts[Q.k] ?? 0) + 1;
+      if (v.last && v.last !== "—") contacted++;
+    }
+    return {
+      partyCounts, tagCounts, support, hist, quickCounts, contacted,
+      precinctList: [...precinct.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+      total: ALL.length,
+    };
+  }, [ALL]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const activeQuick = quick ? QUICKS.find((x) => x.k === quick) : null;
     return ALL.filter((v) => {
       if (!party[v.party]) return false;
-      if (persuadableOnly && !v.flags.includes("persuadable")) return false;
-      if (q && !(`${v.name} ${v.addr} ${v.precinct} ${v.phone}`.toLowerCase().includes(q))) return false;
+      if (precSel.size && !precSel.has(v.precinct)) return false;
+      if (supportSel.size && !supportSel.has(v.support)) return false;
+      if (tagSel.size && !v.flags.some((f) => tagSel.has(f))) return false;
+      if (histSel.size && !histCats(v).some((c) => histSel.has(c))) return false;
+      if (activeQuick && !activeQuick.match(v)) return false;
+      if (q && !`${v.name} ${v.addr} ${v.precinct} ${v.phone}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [ALL, party, search, persuadableOnly]);
+  }, [ALL, party, precSel, supportSel, tagSel, histSel, quick, search]);
 
   const sel = useMemo(() => ALL.find((v) => v.id === selected) ?? null, [ALL, selected]);
+
+  const allParties = party.D && party.R && party.I;
+  const activeCount =
+    (allParties ? 0 : 1) + (quick ? 1 : 0) + tagSel.size + precSel.size + supportSel.size + histSel.size + (search ? 1 : 0);
+
+  const clearAll = () => {
+    setParty({ D: true, R: true, I: true });
+    setQuick(null);
+    setTagSel(new Set());
+    setPrecSel(new Set());
+    setSupportSel(new Set());
+    setHistSel(new Set());
+    setSearch("");
+  };
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({
@@ -59,9 +149,9 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
         <div>
           <h1>Voters</h1>
           <div className="sub">
-            <span className="mono">412,847</span> voters in PA-12 ·&nbsp;
-            <span className="mono">8,124</span> contacted this cycle ·&nbsp;
-            <span className="mono">1,247</span> VBM
+            <span className="mono">{facets.total.toLocaleString()}</span> voters in {CAMPAIGN.district} ·&nbsp;
+            <span className="mono">{facets.contacted.toLocaleString()}</span> contacted ·&nbsp;
+            <span className="mono">{(facets.tagCounts.VBM ?? 0).toLocaleString()}</span> VBM
           </div>
         </div>
         <div className="acts">
@@ -72,50 +162,62 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
       </div>
 
       <div className="vot-body">
+        {/* mobile backdrop behind the filter drawer */}
+        <div className={"filter-backdrop" + (showFilters ? " open" : "")} onClick={() => setShowFilters(false)} />
+
         {/* ── Filter rail ───────────────────────────────────────────── */}
-        <aside className="filter-rail">
+        <aside className={"filter-rail" + (showFilters ? " open" : "")}>
+          <div className="filter-rail-close">
+            <span>Filters{activeCount ? ` · ${activeCount}` : ""}</span>
+            <X style={{ width: 18, height: 18, cursor: "pointer" }} onClick={() => setShowFilters(false)} />
+          </div>
+
           <div className="filter-search">
             <Search className="ico" style={{ width: 14, height: 14, color: "var(--muted)" }} />
             <input placeholder="Name, address, phone…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <span className="kbd">⌘F</span>
+            {activeCount > 0 && (
+              <button type="button" onClick={clearAll} title="Clear filters"
+                style={{ border: 0, background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                Clear
+              </button>
+            )}
           </div>
 
           <FilterSection title="Quick filters">
-            <Chip active={persuadableOnly} onClick={() => setPersuadableOnly((v) => !v)}>Persuadable (1,824)</Chip>
-            <Chip>High-support · low-turnout (612)</Chip>
-            <Chip>VBM outstanding (482)</Chip>
-            <Chip>Never contacted (24,907)</Chip>
-            <Chip ai>✦ Candi recommends · Tier 1 (1,140)</Chip>
+            {QUICKS.map((Q) => (
+              <Chip key={Q.k} ai={Q.ai} active={quick === Q.k} onClick={() => setQuick((c) => (c === Q.k ? null : Q.k))}>
+                {Q.label} ({(facets.quickCounts[Q.k] ?? 0).toLocaleString()})
+              </Chip>
+            ))}
           </FilterSection>
 
           <FilterSection title="Party">
-            <Check label="Democrat" count="184,221" checked={party.D} tone="dem" onChange={(v) => setParty((p) => ({ ...p, D: v }))} />
-            <Check label="Republican" count="151,008" checked={party.R} tone="rep" onChange={(v) => setParty((p) => ({ ...p, R: v }))} />
-            <Check label="Independent / NPA" count="77,618" checked={party.I} tone="ind" onChange={(v) => setParty((p) => ({ ...p, I: v }))} />
+            <Check label="Democrat" count={facets.partyCounts.D.toLocaleString()} checked={party.D} tone="dem" onChange={(v) => setParty((p) => ({ ...p, D: v }))} />
+            <Check label="Republican" count={facets.partyCounts.R.toLocaleString()} checked={party.R} tone="rep" onChange={(v) => setParty((p) => ({ ...p, R: v }))} />
+            <Check label="Independent / NPA" count={facets.partyCounts.I.toLocaleString()} checked={party.I} tone="ind" onChange={(v) => setParty((p) => ({ ...p, I: v }))} />
           </FilterSection>
 
-          <FilterSection title="Support score"><RangeMini /></FilterSection>
+          <FilterSection title="Support score">
+            <RangeMini defs={SUPPORT_DEFS} counts={facets.support} selected={supportSel} onToggle={(v) => setSupportSel((s) => toggleSet(s, v))} />
+          </FilterSection>
 
           <FilterSection title="Vote history">
-            <Check label="Perfect (4/4)" count="218,142" />
-            <Check label="Skipped 1+" count="142,067" />
-            <Check label="New voters" count="12,840" />
+            {HIST_DEFS.map((h) => (
+              <Check key={h.k} label={h.label} count={(facets.hist[h.k] ?? 0).toLocaleString()} checked={histSel.has(h.k)} onChange={() => setHistSel((s) => toggleSet(s, h.k))} />
+            ))}
           </FilterSection>
 
           <FilterSection title="Tags">
-            <Check label="Persuadable" count="1,824" tone="accent" checked={persuadableOnly} onChange={(v) => setPersuadableOnly(v)} />
-            <Check label="Volunteer" count="412" />
-            <Check label="Donor" count="184" />
-            <Check label="VBM requested" count="1,247" tone="amber" />
-            <Check label="Do-not-contact" count="86" tone="rose" />
+            {TAG_DEFS.map((t) => (
+              <Check key={t.k} label={t.label} count={(facets.tagCounts[t.k] ?? 0).toLocaleString()} tone={t.tone} checked={tagSel.has(t.k)} onChange={() => setTagSel((s) => toggleSet(s, t.k))} />
+            ))}
           </FilterSection>
 
           <FilterSection title="Geography">
-            <Check label="Precinct 07N" count="14,212" checked />
-            <Check label="Precinct 12S" count="16,408" checked />
-            <Check label="Precinct 03W" count="11,884" checked />
-            <Check label="Precinct 14E" count="13,562" checked />
-            <Check label="+ 28 more" count="" ghost />
+            {facets.precinctList.length === 0 && <span className="muted" style={{ fontSize: 12, padding: "4px 8px" }}>No precinct data</span>}
+            {facets.precinctList.map(([p, c]) => (
+              <Check key={p} label={`Precinct ${p}`} count={c.toLocaleString()} checked={precSel.has(p)} onChange={() => setPrecSel((s) => toggleSet(s, p))} />
+            ))}
           </FilterSection>
         </aside>
 
@@ -123,12 +225,17 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
         <div className="vot-main">
           <div className="vot-toolbar">
             <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="btn ghost filters-fab" onClick={() => setShowFilters(true)}>
+                <SlidersHorizontal style={{ width: 13, height: 13 }} /> Filters{activeCount ? ` · ${activeCount}` : ""}
+              </button>
               <span className="mono" style={{ fontWeight: 600 }}>{filtered.length.toLocaleString()}</span>
-              <span className="muted">of <span className="mono">412,847</span> voters · filtered by</span>
-              <span className="tag">{party.D && party.R && party.I ? "All parties" : Object.keys(party).filter((p) => party[p as Party]).join("/")}</span>
-              {persuadableOnly && <span className="tag accent">Persuadable</span>}
+              <span className="muted">of <span className="mono">{facets.total.toLocaleString()}</span> voters</span>
+              {!allParties && <span className="tag">{(Object.keys(party) as Party[]).filter((p) => party[p]).map(partyLabel).join("/") || "none"}</span>}
+              {quick && <span className="tag accent">{QUICKS.find((x) => x.k === quick)?.label}</span>}
+              {tagSel.size > 0 && <span className="tag">{tagSel.size} tag{tagSel.size > 1 ? "s" : ""}</span>}
+              {precSel.size > 0 && <span className="tag">{precSel.size} precinct{precSel.size > 1 ? "s" : ""}</span>}
               {search && <span className="tag">“{search}”</span>}
-              <button className="ai-suggest ghost" style={{ marginLeft: 4 }} type="button">+ filter</button>
+              {activeCount > 0 && <button className="ai-suggest ghost" style={{ marginLeft: 4 }} type="button" onClick={clearAll}>Clear all</button>}
             </div>
             <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
               <button className="btn ghost" type="button"><Send style={{ width: 13, height: 13 }} /> Add to text queue</button>
@@ -162,6 +269,9 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
                     </div>
                   );
                 })}
+                {filtered.length === 0 && (
+                  <div className="muted" style={{ padding: 24, fontSize: 13 }}>No voters match these filters.</div>
+                )}
               </div>
             </div>
           </div>
@@ -290,6 +400,7 @@ function Check({ label, count, checked = false, tone, ghost, onChange }: {
   const dot: Record<string, string> = {
     dem: "oklch(0.55 0.14 255)", rep: "oklch(0.55 0.16 25)", ind: "var(--muted)",
     accent: "var(--accent)", amber: "var(--amber)", rose: "var(--rose)",
+    indigo: "var(--indigo)", teal: "var(--teal)",
   };
   return (
     <label className={"check-row" + (ghost ? " ghost" : "")}>
@@ -314,25 +425,25 @@ function Chip({ children, ai, active, onClick }: { children: React.ReactNode; ai
   );
 }
 
-function RangeMini() {
-  const buckets = [
-    { v: 1, n: "Strong opp.", c: "82,140" },
-    { v: 2, n: "Lean opp.", c: "61,228" },
-    { v: 3, n: "Undecided", c: "94,512" },
-    { v: 4, n: "Lean support", c: "79,840" },
-    { v: 5, n: "Strong supp.", c: "95,127" },
-  ];
-  const max = 95127;
+function RangeMini({ defs, counts, selected, onToggle }: {
+  defs: { v: number; n: string }[]; counts: number[]; selected: Set<number>; onToggle: (v: number) => void;
+}) {
+  const max = Math.max(1, ...counts);
   return (
     <div className="range-mini">
-      {buckets.map((b) => (
-        <button key={b.v} className="rm-row" type="button">
-          <span className="rm-num mono">{b.v}</span>
-          <span className="rm-bar"><i style={{ width: `${(parseInt(b.c.replace(/,/g, "")) / max) * 100}%`, background: b.v >= 4 ? "var(--accent)" : b.v <= 2 ? "var(--rose)" : "var(--mute-2)" }} /></span>
-          <span className="rm-lbl">{b.n}</span>
-          <span className="rm-count mono">{b.c}</span>
-        </button>
-      ))}
+      {defs.map((b) => {
+        const c = counts[b.v - 1] ?? 0;
+        const on = selected.has(b.v);
+        return (
+          <button key={b.v} className="rm-row" type="button" onClick={() => onToggle(b.v)}
+            style={on ? { background: "var(--surface-3)", borderRadius: 5 } : undefined}>
+            <span className="rm-num mono">{on ? "✓" : b.v}</span>
+            <span className="rm-bar"><i style={{ width: `${(c / max) * 100}%`, background: b.v >= 4 ? "var(--accent)" : b.v <= 2 ? "var(--rose)" : "var(--mute-2)" }} /></span>
+            <span className="rm-lbl">{b.n}</span>
+            <span className="rm-count mono">{c.toLocaleString()}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

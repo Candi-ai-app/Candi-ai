@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { Filter, Calendar, Sparkles } from "lucide-react";
+import { getRole, isAdminRole } from "@/lib/auth";
 
 // ── placeholder data (wired to Supabase in the Voters/HQ slice) ──────────────
 const velocity = [30, 38, 34, 46, 42, 52, 58, 50, 64, 60, 72, 66, 80, 86];
@@ -39,7 +41,10 @@ const pts = velocity.map((v, i) => [PAD + i * step, CH - (v / 100) * (CH - 24)])
 const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
 const area = `${line} L${(PAD + (velocity.length - 1) * step).toFixed(1)},${CH} L${PAD},${CH} Z`;
 
-export default function HQPage() {
+export default async function HQPage() {
+  // HQ is the campaign command center — owners/directors only.
+  if (!isAdminRole(await getRole())) redirect("/canvassing");
+
   return (
     <div className="hq">
       <div className="module-head">

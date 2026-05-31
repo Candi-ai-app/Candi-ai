@@ -1231,9 +1231,35 @@ svg.ico { display: block; }
   .hq-grid .hq-vbm,
   .hq-grid .hq-trend { grid-column: 1; }
 }
+/* Mobile filters drawer (Voters) — hidden on desktop, slide-in on phone/tablet */
+.filters-fab,
+.filter-rail-close,
+.filter-backdrop { display: none; }
+
 @media (max-width: 900px) {
   .vot-body  { grid-template-columns: 1fr; }
   .vot-body  > .filter-rail { display: none; }
+
+  .filters-fab { display: inline-flex; }
+
+  .vot-body > .filter-rail.open {
+    display: block;
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(86vw, 320px);
+    z-index: 60;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
+  }
+  .filter-rail.open .filter-rail-close {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: 14px;
+    position: sticky; top: 0; background: var(--surface-2); z-index: 1;
+  }
+  .filter-backdrop.open {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.4); z-index: 55;
+  }
 }
 
 /* ── Mobile / phone ──────────────────────────────────────────────────────── */

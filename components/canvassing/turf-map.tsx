@@ -10,8 +10,8 @@ import { saveTurf, listTurfs, type SavedTurf, type GeoPolygon } from "@/app/(app
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 const STYLES = [
-  { label: "Satellite", url: "mapbox://styles/mapbox/satellite-streets-v12" },
   { label: "Streets", url: "mapbox://styles/mapbox/streets-v12" },
+  { label: "Satellite", url: "mapbox://styles/mapbox/satellite-streets-v12" },
   { label: "Light", url: "mapbox://styles/mapbox/light-v11" },
   { label: "Dark", url: "mapbox://styles/mapbox/dark-v11" },
   { label: "Outdoors", url: "mapbox://styles/mapbox/outdoors-v12" },

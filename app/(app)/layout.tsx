@@ -15,12 +15,19 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const role = (membership?.role as string) ?? "canvasser";
+
   return (
     <div className="app density-cozy">
-      <Sidebar />
+      <Sidebar role={role} email={user.email ?? ""} />
       <Topbar />
       <main className="canvas">{children}</main>
-      <MobileNav />
+      <MobileNav role={role} />
     </div>
   );
 }
