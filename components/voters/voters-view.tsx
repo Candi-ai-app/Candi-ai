@@ -26,7 +26,8 @@ const COLS = [
 ] as const;
 const TOTAL_W = COLS.reduce((a, c) => a + c.w, 0);
 
-export function VotersView() {
+export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
+  const ALL = initialVoters && initialVoters.length ? initialVoters : VOTERS;
   const [selected, setSelected] = useState<string | null>("V-014825");
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
   const [search, setSearch] = useState("");
@@ -34,15 +35,15 @@ export function VotersView() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return VOTERS.filter((v) => {
+    return ALL.filter((v) => {
       if (!party[v.party]) return false;
       if (persuadableOnly && !v.flags.includes("persuadable")) return false;
       if (q && !(`${v.name} ${v.addr} ${v.precinct} ${v.phone}`.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [party, search, persuadableOnly]);
+  }, [ALL, party, search, persuadableOnly]);
 
-  const sel = useMemo(() => VOTERS.find((v) => v.id === selected) ?? null, [selected]);
+  const sel = useMemo(() => ALL.find((v) => v.id === selected) ?? null, [ALL, selected]);
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({
