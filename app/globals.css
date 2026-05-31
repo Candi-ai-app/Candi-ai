@@ -799,6 +799,20 @@ svg.ico { display: block; }
 }
 .filter-body .chip { width: calc(100% - 16px); justify-content: flex-start; }
 
+/* support-score mini bar-chart filter (RangeMini) */
+.range-mini { display: flex; flex-direction: column; gap: 1px; padding: 2px 2px 0; }
+.rm-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 8px; border: 0; background: transparent; cursor: pointer;
+  text-align: left; border-radius: 5px; color: var(--ink-2);
+}
+.rm-row:hover { background: var(--surface-3); }
+.rm-num { flex: 0 0 14px; text-align: center; font-size: 11px; color: var(--muted); font-family: var(--f-mono); }
+.rm-bar { flex: 1 1 auto; height: 6px; min-width: 24px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.rm-bar i { display: block; height: 100%; border-radius: 3px; }
+.rm-lbl { flex: 0 0 74px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-count { flex: 0 0 42px; text-align: right; font-size: 11px; color: var(--mute-2); font-family: var(--f-mono); }
+
 /* ── Super-voter (N-of-M) control ─────────────────────────────────────────── */
 .sv-control { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
 .sv-sentence {
