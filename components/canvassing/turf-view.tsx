@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Layers, Sparkles, Plus, Search, SlidersHorizontal, MapPin, X } from "lucide-react";
 import { TURFS, CANVASSERS, type Turf, type Canvasser } from "@/lib/mock-data";
+import type { VoterPoint } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
 
 // Mapbox GL touches window/WebGL — load it client-only.
@@ -15,7 +16,7 @@ const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m
   ),
 });
 
-export function TurfView() {
+export function TurfView({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
   const [selTurf, setSelTurf] = useState<string | null>("T-12S-A");
   const sel = useMemo(() => TURFS.find((t) => t.id === selTurf) ?? null, [selTurf]);
   const livePins = CANVASSERS.filter((c) => c.status === "live");
@@ -68,8 +69,8 @@ export function TurfView() {
           })}
         </aside>
 
-        {/* ── Map — real Mapbox turf cutting ────────────────────────── */}
-        <TurfMap />
+        {/* ── Map — real Mapbox turf cutting + filtered voter pins ──── */}
+        <TurfMap voterPoints={voterPoints} />
 
         {/* ── Turf detail ───────────────────────────────────────────── */}
         {sel && <TurfDetail t={sel} onClose={() => setSelTurf(null)} />}
