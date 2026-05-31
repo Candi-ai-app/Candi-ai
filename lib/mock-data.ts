@@ -19,7 +19,21 @@ export type Voter = {
   last: string; // last-contact label
   phone: string;
   flags: string[]; // persuadable | volunteer | donor | VBM | new
+  race?: string; // White | Black | Hispanic/Latino | Asian | Other
+  gender?: string; // M | F | X
+  elections?: Record<string, boolean>; // per-election turnout, e.g. { "2024G": true, ... }
 };
+
+// Build the per-election history map from a "(got/total)" history string,
+// filling the most-recent RECENT_ELECTIONS codes as voted first.
+const ELECTION_CODES = ["2024G", "2022G", "2020G", "2018G"] as const;
+function electionsFromHistory(history: string): Record<string, boolean> {
+  const m = history.match(/(\d+)\s*\/\s*(\d+)/);
+  const got = m ? parseInt(m[1]) : 0;
+  const out: Record<string, boolean> = {};
+  ELECTION_CODES.forEach((code, i) => (out[code] = i < got));
+  return out;
+}
 
 export const CAMPAIGN = {
   candidate: "Mira Reyes",
@@ -59,6 +73,26 @@ const HERO: Voter[] = [
   { id: "V-014844", name: "Trevor Maddox", age: 19, party: "I", precinct: "12S", addr: "1409 E Carson St", city: "Pittsburgh", zip: "15203", support: 3, history: "0% (0/1)", last: "Door · today", phone: "(412) 555-0288", flags: ["persuadable", "new"], persuasion: 5 },
 ];
 
+// Plausible, deterministic race/gender for the hand-authored hero rows so the
+// new demographic facets have data without re-authoring all 22 literals.
+function heroHash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function enrichHero(v: Voter): Voter {
+  const h = heroHash(v.id);
+  const rb = h % 100;
+  const race =
+    rb < 38 ? "White" : rb < 68 ? "Black" : rb < 90 ? "Hispanic/Latino" : rb < 95 ? "Asian" : "Other";
+  const gb = (h >>> 7) % 100;
+  const gender = gb < 48 ? "M" : gb < 97 ? "F" : "X";
+  return { ...v, race, gender, elections: electionsFromHistory(v.history) };
+}
+
 // ── deterministic synthetic fill (seeded) ────────────────────────────────────
 function mulberry32(seed: number) {
   return function () {
@@ -75,7 +109,6 @@ const LAST = ["Nguyen", "Carter", "Flores", "Brooks", "Patel", "Reed", "Murphy",
 const STREETS = ["Penn Ave", "Forbes Ave", "Liberty Ave", "Negley Ave", "Highland Ave", "Murray Ave", "Carson St", "Butler St", "Walnut St", "Centre Ave", "Fifth Ave", "Baum Blvd", "Stanton Ave", "Atwood St", "Craig St"];
 const PRECINCTS = ["07N", "12S", "03W", "14E", "05N", "09S", "11W", "16E", "02N", "18S"];
 const ZIPS = ["15213", "15217", "15206", "15203", "15219", "15232", "15224", "15201", "15233", "15222"];
-const HISTORIES = ["100% (4/4)", "100% (4/4)", "75% (3/4)", "75% (3/4)", "50% (2/4)", "25% (1/4)", "0% (0/4)"];
 const LASTS = ["Door · 3d", "Text · 1d", "—", "—", "Call · 5d", "Mail · 8d", "Door · today", "Text · 12h", "VBM · 14d"];
 
 function genVoters(n: number, startNum: number): Voter[] {
@@ -93,18 +126,39 @@ function genVoters(n: number, startNum: number): Voter[] {
     if (rng() < 0.05) flags.push("donor");
     if (rng() < 0.07) flags.push("VBM");
     const num = startNum + i;
+    const age = 18 + Math.floor(rng() * 68);
+    // Age-boosted per-election turnout (older → likelier), older cycles decay a
+    // little. Thresholds mirror the SQL backfill so ~25-35% clear 3-of-4.
+    const boost = Math.min(age, 80) * 0.0035;
+    const elections: Record<string, boolean> = {
+      "2024G": rng() < 0.52 + boost,
+      "2022G": rng() < 0.48 + boost,
+      "2020G": rng() < 0.44 + boost,
+      "2018G": rng() < 0.4 + boost,
+    };
+    const got = Object.values(elections).filter(Boolean).length;
+    const history = `${Math.round((got / 4) * 100)}% (${got}/4)`;
+    // Race: Broward-leaning plausible mix. Gender: M/F/X.
+    const rb = rng();
+    const race =
+      rb < 0.38 ? "White" : rb < 0.68 ? "Black" : rb < 0.9 ? "Hispanic/Latino" : rb < 0.95 ? "Asian" : "Other";
+    const gb = rng();
+    const gender = gb < 0.48 ? "M" : gb < 0.97 ? "F" : "X";
     out.push({
       id: `V-0${14845 + i}`,
       name: `${FIRST[Math.floor(rng() * FIRST.length)]} ${LAST[Math.floor(rng() * LAST.length)]}`,
-      age: 18 + Math.floor(rng() * 68),
+      age,
       party,
       precinct: PRECINCTS[Math.floor(rng() * PRECINCTS.length)],
       addr: `${100 + Math.floor(rng() * 8900)} ${STREETS[Math.floor(rng() * STREETS.length)]}`,
       city: "Pittsburgh",
       zip: ZIPS[Math.floor(rng() * ZIPS.length)],
+      race,
+      gender,
+      elections,
       support,
       persuasion,
-      history: HISTORIES[Math.floor(rng() * HISTORIES.length)],
+      history,
       last: LASTS[Math.floor(rng() * LASTS.length)],
       phone: `(412) 555-0${100 + Math.floor(rng() * 899)}`,
       flags,
@@ -114,7 +168,7 @@ function genVoters(n: number, startNum: number): Voter[] {
   return out;
 }
 
-export const VOTERS: Voter[] = [...HERO, ...genVoters(1980, HERO.length)];
+export const VOTERS: Voter[] = [...HERO.map(enrichHero), ...genVoters(1980, HERO.length)];
 
 export const partyLabel = (p: Party) => (p === "D" ? "Dem" : p === "R" ? "Rep" : "Ind");
 export const partyFull = (p: Party) => (p === "D" ? "Democrat" : p === "R" ? "Republican" : "Independent");

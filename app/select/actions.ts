@@ -125,8 +125,6 @@ const LAST = [
   "Okafor", "Romano", "Bauer", "Singh", "Hughes", "Lozano", "Foster", "Khan", "Berg", "Ali",
   "Tucker", "Mercer", "Vance", "Ortiz", "Hale", "Henderson", "Whitfield", "Raman", "Bell", "Park",
 ];
-const HISTORIES = ["100% (4/4)", "100% (4/4)", "75% (3/4)", "75% (3/4)", "50% (2/4)", "25% (1/4)", "0% (0/4)"];
-
 // Generic fallback if a campaign is created without a recognized area.
 const FALLBACK: Pick<AreaCounty, "city" | "zips" | "precincts" | "bbox" | "streets"> = {
   city: "Springfield",
@@ -171,8 +169,10 @@ type VoterRow = {
   phone: string;
   support: number;
   persuasion: number;
-  vote_history: { label: string };
+  vote_history: { label: string; history: Record<string, boolean> };
   flags: string[];
+  race: string;
+  gender: string;
   geom: string; // WKT POINT — accepted by PostGIS geometry(Point,4326) on insert.
 };
 
@@ -202,6 +202,28 @@ function buildSampleVoters(campaignId: string, stateName: string, county: string
     if (rng() < 0.05) flags.push("donor");
     if (rng() < 0.07) flags.push("VBM");
 
+    const age = 18 + Math.floor(rng() * 69); // 18–86
+
+    // Per-election turnout (most-recent-first: 2024G, 2022G, 2020G, 2018G),
+    // age-boosted so older voters vote more. Stored on vote_history.history so
+    // the super-voter (N-of-M) filter works on onboarding-created campaigns.
+    const boost = Math.min(age, 80) * 0.0035;
+    const history: Record<string, boolean> = {
+      "2024G": rng() < 0.52 + boost,
+      "2022G": rng() < 0.48 + boost,
+      "2020G": rng() < 0.44 + boost,
+      "2018G": rng() < 0.4 + boost,
+    };
+    const got = Object.values(history).filter(Boolean).length;
+    const label = `${Math.round((got / 4) * 100)}% (${got}/4)`;
+
+    // Race: Broward-leaning plausible mix. Gender: M/F/X.
+    const rb = rng();
+    const race =
+      rb < 0.38 ? "White" : rb < 0.68 ? "Black" : rb < 0.9 ? "Hispanic/Latino" : rb < 0.95 ? "Asian" : "Other";
+    const gb = rng();
+    const gender = gb < 0.48 ? "M" : gb < 0.97 ? "F" : "X";
+
     const lng = west + rng() * (east - west);
     const lat = south + rng() * (north - south);
 
@@ -210,7 +232,7 @@ function buildSampleVoters(campaignId: string, stateName: string, county: string
       external_id: `S-${hashSeed(campaignId).toString(36).toUpperCase()}-${100000 + i}`,
       first_name: pick(FIRST),
       last_name: pick(LAST),
-      age: 18 + Math.floor(rng() * 69), // 18–86
+      age,
       party,
       precinct: pick(area.precincts),
       address: `${100 + Math.floor(rng() * 8900)} ${pick(area.streets)}`,
@@ -220,8 +242,10 @@ function buildSampleVoters(campaignId: string, stateName: string, county: string
       phone: `(555) 555-0${(100 + Math.floor(rng() * 899)).toString().padStart(3, "0")}`,
       support,
       persuasion,
-      vote_history: { label: pick(HISTORIES) },
+      vote_history: { label, history },
       flags,
+      race,
+      gender,
       geom: `SRID=4326;POINT(${lng.toFixed(6)} ${lat.toFixed(6)})`,
     });
   }

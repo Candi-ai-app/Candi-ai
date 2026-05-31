@@ -7,6 +7,7 @@ import {
   X, ChevronDown, MessageSquare, Footprints, Check as CheckIcon, Minus,
 } from "lucide-react";
 import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
+import { MAX_M, voteCount } from "@/lib/elections";
 
 const ROW_H = 38;
 
@@ -33,12 +34,6 @@ function turnoutPct(h: string): number {
   const pct = h.match(/(\d+)\s*%/);
   return pct ? parseInt(pct[1]) : 0;
 }
-function histCats(v: Voter): string[] {
-  const cats: string[] = [];
-  if (v.flags.includes("new")) cats.push("new");
-  if (v.history) cats.push(turnoutPct(v.history) >= 100 ? "perfect" : "skipped");
-  return cats;
-}
 const QUICKS: { k: string; label: string; ai?: boolean; match: (v: Voter) => boolean }[] = [
   { k: "persuadable", label: "Persuadable", match: (v) => v.flags.includes("persuadable") },
   { k: "highlow", label: "High-support · low-turnout", match: (v) => v.support >= 4 && turnoutPct(v.history) < 100 },
@@ -50,8 +45,8 @@ const SUPPORT_DEFS = [
   { v: 1, n: "Strong opp." }, { v: 2, n: "Lean opp." }, { v: 3, n: "Undecided" },
   { v: 4, n: "Lean support" }, { v: 5, n: "Strong supp." },
 ];
-const HIST_DEFS = [
-  { k: "perfect", label: "Perfect (4/4)" }, { k: "skipped", label: "Skipped 1+" }, { k: "new", label: "New voters" },
+const GENDER_DEFS = [
+  { k: "M", label: "Male" }, { k: "F", label: "Female" }, { k: "X", label: "Other / X" },
 ];
 const TAG_DEFS = [
   { k: "persuadable", label: "Persuadable", tone: "accent" },
@@ -76,7 +71,13 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
   const [tagSel, setTagSel] = useState<Set<string>>(new Set());
   const [precSel, setPrecSel] = useState<Set<string>>(new Set());
   const [supportSel, setSupportSel] = useState<Set<number>>(new Set());
-  const [histSel, setHistSel] = useState<Set<string>>(new Set());
+  const [raceSel, setRaceSel] = useState<Set<string>>(new Set());
+  const [genderSel, setGenderSel] = useState<Set<string>>(new Set());
+  const [citySel, setCitySel] = useState<Set<string>>(new Set());
+  // Super-voter control: "voted in at least N of the last M elections".
+  const [svOn, setSvOn] = useState(false);
+  const [svN, setSvN] = useState(3);
+  const [svM, setSvM] = useState(MAX_M);
   const [showFilters, setShowFilters] = useState(false); // mobile drawer
 
   // facet options + counts, derived from the loaded voter set (live or mock)
@@ -85,7 +86,9 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
     const precinct = new Map<string, number>();
     const tagCounts: Record<string, number> = {};
     const support = [0, 0, 0, 0, 0];
-    const hist: Record<string, number> = { perfect: 0, skipped: 0, new: 0 };
+    const race = new Map<string, number>();
+    const gender: Record<string, number> = { M: 0, F: 0, X: 0 };
+    const city = new Map<string, number>();
     const quickCounts: Record<string, number> = {};
     let contacted = 0;
     for (const v of ALL) {
@@ -93,16 +96,26 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
       if (v.precinct) precinct.set(v.precinct, (precinct.get(v.precinct) ?? 0) + 1);
       for (const f of v.flags) tagCounts[f] = (tagCounts[f] ?? 0) + 1;
       if (v.support >= 1 && v.support <= 5) support[v.support - 1]++;
-      for (const c of histCats(v)) hist[c] = (hist[c] ?? 0) + 1;
+      if (v.race) race.set(v.race, (race.get(v.race) ?? 0) + 1);
+      if (v.gender && v.gender in gender) gender[v.gender]++;
+      if (v.city) city.set(v.city, (city.get(v.city) ?? 0) + 1);
       for (const Q of QUICKS) if (Q.match(v)) quickCounts[Q.k] = (quickCounts[Q.k] ?? 0) + 1;
       if (v.last && v.last !== "—") contacted++;
     }
     return {
-      partyCounts, tagCounts, support, hist, quickCounts, contacted,
+      partyCounts, tagCounts, support, gender, quickCounts, contacted,
       precinctList: [...precinct.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+      raceList: [...race.entries()].sort((a, b) => b[1] - a[1]),
+      cityList: [...city.entries()].sort((a, b) => b[1] - a[1]),
       total: ALL.length,
     };
   }, [ALL]);
+
+  // Live count of voters matching the current super-voter (N-of-M) threshold.
+  const svCount = useMemo(
+    () => ALL.reduce((n, v) => n + (voteCount(v.elections, svM) >= svN ? 1 : 0), 0),
+    [ALL, svN, svM]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -112,18 +125,22 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
       if (precSel.size && !precSel.has(v.precinct)) return false;
       if (supportSel.size && !supportSel.has(v.support)) return false;
       if (tagSel.size && !v.flags.some((f) => tagSel.has(f))) return false;
-      if (histSel.size && !histCats(v).some((c) => histSel.has(c))) return false;
+      if (svOn && voteCount(v.elections, svM) < svN) return false;
+      if (raceSel.size && !(v.race && raceSel.has(v.race))) return false;
+      if (genderSel.size && !(v.gender && genderSel.has(v.gender))) return false;
+      if (citySel.size && !(v.city && citySel.has(v.city))) return false;
       if (activeQuick && !activeQuick.match(v)) return false;
       if (q && !`${v.name} ${v.addr} ${v.precinct} ${v.phone}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [ALL, party, precSel, supportSel, tagSel, histSel, quick, search]);
+  }, [ALL, party, precSel, supportSel, tagSel, svOn, svN, svM, raceSel, genderSel, citySel, quick, search]);
 
   const sel = useMemo(() => ALL.find((v) => v.id === selected) ?? null, [ALL, selected]);
 
   const allParties = party.D && party.R && party.I;
   const activeCount =
-    (allParties ? 0 : 1) + (quick ? 1 : 0) + tagSel.size + precSel.size + supportSel.size + histSel.size + (search ? 1 : 0);
+    (allParties ? 0 : 1) + (quick ? 1 : 0) + tagSel.size + precSel.size + supportSel.size +
+    (svOn ? 1 : 0) + raceSel.size + genderSel.size + citySel.size + (search ? 1 : 0);
 
   const clearAll = () => {
     setParty({ D: true, R: true, I: true });
@@ -131,7 +148,10 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
     setTagSel(new Set());
     setPrecSel(new Set());
     setSupportSel(new Set());
-    setHistSel(new Set());
+    setSvOn(false);
+    setRaceSel(new Set());
+    setGenderSel(new Set());
+    setCitySel(new Set());
     setSearch("");
   };
 
@@ -202,14 +222,35 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
           </FilterSection>
 
           <FilterSection title="Vote history">
-            {HIST_DEFS.map((h) => (
-              <Check key={h.k} label={h.label} count={(facets.hist[h.k] ?? 0).toLocaleString()} checked={histSel.has(h.k)} onChange={() => setHistSel((s) => toggleSet(s, h.k))} />
+            <SuperVoter
+              on={svOn} n={svN} m={svM} count={svCount} total={facets.total}
+              onToggle={setSvOn} onN={setSvN} onM={setSvM}
+            />
+          </FilterSection>
+
+          <FilterSection title="Race / ethnicity">
+            {facets.raceList.length === 0 && <span className="muted" style={{ fontSize: 12, padding: "4px 8px" }}>No race data</span>}
+            {facets.raceList.map(([rc, c]) => (
+              <Check key={rc} label={rc} count={c.toLocaleString()} checked={raceSel.has(rc)} onChange={() => setRaceSel((s) => toggleSet(s, rc))} />
+            ))}
+          </FilterSection>
+
+          <FilterSection title="Gender">
+            {GENDER_DEFS.map((g) => (
+              <Check key={g.k} label={g.label} count={(facets.gender[g.k] ?? 0).toLocaleString()} checked={genderSel.has(g.k)} onChange={() => setGenderSel((s) => toggleSet(s, g.k))} />
             ))}
           </FilterSection>
 
           <FilterSection title="Tags">
             {TAG_DEFS.map((t) => (
               <Check key={t.k} label={t.label} count={(facets.tagCounts[t.k] ?? 0).toLocaleString()} tone={t.tone} checked={tagSel.has(t.k)} onChange={() => setTagSel((s) => toggleSet(s, t.k))} />
+            ))}
+          </FilterSection>
+
+          <FilterSection title="City / municipality">
+            {facets.cityList.length === 0 && <span className="muted" style={{ fontSize: 12, padding: "4px 8px" }}>No city data</span>}
+            {facets.cityList.map(([ct, c]) => (
+              <Check key={ct} label={ct} count={c.toLocaleString()} checked={citySel.has(ct)} onChange={() => setCitySel((s) => toggleSet(s, ct))} />
             ))}
           </FilterSection>
 
@@ -232,6 +273,10 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
               <span className="muted">of <span className="mono">{facets.total.toLocaleString()}</span> voters</span>
               {!allParties && <span className="tag">{(Object.keys(party) as Party[]).filter((p) => party[p]).map(partyLabel).join("/") || "none"}</span>}
               {quick && <span className="tag accent">{QUICKS.find((x) => x.k === quick)?.label}</span>}
+              {svOn && <span className="tag accent">≥{svN} of last {svM}</span>}
+              {raceSel.size > 0 && <span className="tag">{raceSel.size} race{raceSel.size > 1 ? "s" : ""}</span>}
+              {genderSel.size > 0 && <span className="tag">{[...genderSel].join("/")}</span>}
+              {citySel.size > 0 && <span className="tag">{citySel.size} cit{citySel.size > 1 ? "ies" : "y"}</span>}
               {tagSel.size > 0 && <span className="tag">{tagSel.size} tag{tagSel.size > 1 ? "s" : ""}</span>}
               {precSel.size > 0 && <span className="tag">{precSel.size} precinct{precSel.size > 1 ? "s" : ""}</span>}
               {search && <span className="tag">“{search}”</span>}
@@ -422,6 +467,55 @@ function Chip({ children, ai, active, onClick }: { children: React.ReactNode; ai
     >
       {children}
     </button>
+  );
+}
+
+// Super-voter control: "Voted in at least [N] of the last [M] elections".
+// N: 1..M, M: 2..MAX_M (default N=3, M=4). A voter passes when
+// voteCount(elections, M) >= N. The live matching count is shown below.
+function SuperVoter({ on, n, m, count, total, onToggle, onN, onM }: {
+  on: boolean; n: number; m: number; count: number; total: number;
+  onToggle: (v: boolean) => void; onN: (v: number) => void; onM: (v: number) => void;
+}) {
+  const setM = (next: number) => {
+    const mm = Math.max(2, Math.min(MAX_M, next));
+    onM(mm);
+    if (n > mm) onN(mm); // keep N ≤ M
+  };
+  const setN = (next: number) => onN(Math.max(1, Math.min(m, next)));
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="sv-control">
+      <label className="check-row" style={{ fontWeight: 500 }}>
+        <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} />
+        <span className="check-label">Super voters only</span>
+      </label>
+      <div className="sv-sentence" style={{ opacity: on ? 1 : 0.5, pointerEvents: on ? "auto" : "none" }}>
+        <span>Voted in at least</span>
+        <Stepper value={n} min={1} max={m} onChange={setN} />
+        <span>of the last</span>
+        <Stepper value={m} min={2} max={MAX_M} onChange={setM} />
+        <span>elections.</span>
+      </div>
+      <div className="sv-count muted">
+        <span className="mono" style={{ fontWeight: 600, color: "var(--ink)" }}>{count.toLocaleString()}</span> match
+        {on ? "" : " if enabled"} · {pct}% of loaded
+      </div>
+    </div>
+  );
+}
+
+function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <span className="sv-stepper">
+      <button type="button" aria-label="decrease" disabled={value <= min} onClick={() => onChange(value - 1)}>
+        <Minus style={{ width: 11, height: 11 }} />
+      </button>
+      <span className="mono sv-val">{value}</span>
+      <button type="button" aria-label="increase" disabled={value >= max} onClick={() => onChange(value + 1)}>
+        <Plus style={{ width: 11, height: 11 }} />
+      </button>
+    </span>
   );
 }
 

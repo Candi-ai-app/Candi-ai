@@ -13,7 +13,7 @@ export default async function VotersPage() {
     ? await supabase
         .from("voters")
         .select(
-          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, support, persuasion, vote_history, flags"
+          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, support, persuasion, vote_history, flags, race, gender"
         )
         .eq("campaign_id", campaignId)
         .order("last_name", { ascending: true })
@@ -34,6 +34,9 @@ export default async function VotersPage() {
     history: (r.vote_history as { label?: string } | null)?.label ?? "",
     last: "—",
     flags: (r.flags as string[]) ?? [],
+    race: (r.race as string) ?? undefined,
+    gender: (r.gender as string) ?? undefined,
+    elections: (r.vote_history as { history?: Record<string, boolean> } | null)?.history ?? {},
   }));
 
   return <VotersView initialVoters={voters} />;
