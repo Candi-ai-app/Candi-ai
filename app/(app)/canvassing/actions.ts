@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 
 const CAMPAIGN_ID = "00000000-0000-0000-0000-000000000010"; // demo: Reyes campaign
 
@@ -16,7 +16,7 @@ export type SavedTurf = {
 };
 
 export async function listTurfs(): Promise<SavedTurf[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("list_turfs", { p_campaign: CAMPAIGN_ID });
   if (error) {
     console.error("listTurfs:", error.message);
@@ -26,7 +26,7 @@ export async function listTurfs(): Promise<SavedTurf[]> {
 }
 
 export async function saveTurf(geometry: GeoPolygon): Promise<{ ok: boolean }> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.rpc("create_turf", {
     p_campaign: CAMPAIGN_ID,
     p_geojson: geometry,
