@@ -68,12 +68,16 @@ export function CampaignPicker({
           {campaigns.map((c) => {
             const date = formatDate(c.election_date);
             const meta = [c.office, c.district].filter(Boolean).join(" · ");
+            const isDraft = !meta;
             return (
               <form key={c.id} action={selectCampaign.bind(null, c.id)}>
                 <button type="submit" className="campaign-card" aria-label={`Open ${c.candidate}`}>
                   <div className="campaign-card-top">
                     <span className="campaign-avatar">{initials(c.candidate)}</span>
-                    <ArrowRight className="campaign-arrow" />
+                    <span className="campaign-card-top-right">
+                      {isDraft && <span className="campaign-draft">Draft</span>}
+                      <ArrowRight className="campaign-arrow" />
+                    </span>
                   </div>
                   <div className="campaign-name">{c.candidate}</div>
                   <div className="campaign-meta">
@@ -83,7 +87,7 @@ export function CampaignPicker({
                         {meta}
                       </span>
                     ) : (
-                      <span className="campaign-meta-row muted">No office set</span>
+                      <span className="campaign-meta-row muted">Finish setup to add voters</span>
                     )}
                     {date ? (
                       <span className="campaign-meta-row">

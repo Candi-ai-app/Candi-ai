@@ -1536,6 +1536,12 @@ svg.ico { display: block; }
   transition: transform 0.14s ease, color 0.14s ease;
 }
 .campaign-card:hover .campaign-arrow { color: var(--ink); transform: translateX(2px); }
+.campaign-card-top-right { display: flex; align-items: center; gap: 6px; }
+.campaign-draft {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--amber-2); color: var(--amber);
+}
 .campaign-name {
   font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
   margin-top: auto;
