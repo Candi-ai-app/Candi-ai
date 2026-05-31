@@ -6,6 +6,7 @@ export const CAMPAIGN_COOKIE = "candi_campaign";
 
 export type ActiveCampaign = {
   id: string;
+  org_id: string;
   candidate: string;
   office: string | null;
   district: string | null;
@@ -29,7 +30,7 @@ export async function getActiveCampaign(): Promise<ActiveCampaign | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("campaigns")
-    .select("id, candidate, office, district, election_date")
+    .select("id, org_id, candidate, office, district, election_date")
     .eq("id", id)
     .maybeSingle();
 
