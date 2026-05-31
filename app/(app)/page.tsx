@@ -116,16 +116,26 @@ export default async function HQPage() {
 
   const isSupport = (r: ContactRow) => r.result === "supporter" || (r.support ?? 0) >= 4;
 
-  // KPI: doors knocked today, contacts made, contact rate (contacts / door-attempts).
+  // A contact is "made" only when someone was actually reached. Attempts that
+  // didn't reach a person ('not-home') or just dropped literature ('lit-dropped')
+  // don't count, so the rate reflects real conversations, not door-knocks.
+  const NO_CONTACT_RESULTS = new Set(["not-home", "lit-dropped"]);
+  const isReached = (r: ContactRow) => !NO_CONTACT_RESULTS.has(r.result ?? "");
+
+  // KPI: doors knocked today, contacts made (reached), contact rate (door-reached / door-attempts).
   let doorsToday = 0;
   let doorAttempts = 0;
+  let doorsReached = 0;
   for (const r of contacts) {
     const isDoor = r.channel === "door";
-    if (isDoor) doorAttempts++;
-    if (isDoor && dayKey(new Date(r.created_at)) === todayKey) doorsToday++;
+    if (isDoor) {
+      doorAttempts++;
+      if (isReached(r)) doorsReached++;
+      if (dayKey(new Date(r.created_at)) === todayKey) doorsToday++;
+    }
   }
-  const contactsMade = contacts.length;
-  const contactRate = doorAttempts > 0 ? Math.round((contactsMade / doorAttempts) * 100) : 0;
+  const contactsMade = contacts.reduce((n, r) => n + (isReached(r) ? 1 : 0), 0);
+  const contactRate = doorAttempts > 0 ? Math.round((doorsReached / doorAttempts) * 100) : 0;
 
   const supportersIdd = supportersRes.count ?? 0;
   const vbmReturned = vbmRes.count ?? 0;

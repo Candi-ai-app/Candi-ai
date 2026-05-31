@@ -9,20 +9,41 @@ import { signOut } from "@/app/login/actions";
 // Canvassers get the field-focused subset; owners/directors see everything.
 const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/texting"]);
 
+/** Compact count for nav badges: 412847 → "413K", 600 → "600", 0 → "". */
+function compact(n: number): string {
+  if (!n || n < 0) return "";
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${Math.round(n / 1000)}K`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
 export function Sidebar({
   role = "director",
   email = "",
   activeCampaign = "",
+  voterCount = 0,
+  turfCount = 0,
 }: {
   role?: string;
   email?: string;
   activeCampaign?: string;
+  /** Real voter count for the active campaign → Voters nav badge. */
+  voterCount?: number;
+  /** Real active-turf count for the active campaign → Canvassing nav badge. */
+  turfCount?: number;
 }) {
   const pathname = usePathname();
   const isCanvasser = role === "canvasser";
   const nav = isCanvasser ? PRIMARY_NAV.filter((i) => CANVASSER_HREFS.has(i.href)) : PRIMARY_NAV;
   const initials = (email.split("@")[0] || "U").slice(0, 2).toUpperCase();
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+
+  // Inject real badges by href; nav items themselves no longer carry static counts.
+  const badgeFor = (href: string): string | undefined => {
+    if (href === "/voters") return compact(voterCount) || undefined;
+    if (href === "/canvassing") return turfCount > 0 ? String(turfCount) : undefined;
+    return undefined;
+  };
 
   return (
     <aside className="sidebar">
@@ -50,12 +71,13 @@ export function Sidebar({
         {nav.map((item) => {
           const Icon = item.icon;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const badge = badgeFor(item.href);
           return (
             <Link key={item.href} href={item.href} className={active ? "active" : undefined}>
               <Icon className="ico" />
               <span>{item.label}</span>
               {item.kbd && <span className="kbd">{item.kbd}</span>}
-              {item.badge && <span className={item.badgeMuted ? "badge muted" : "badge"}>{item.badge}</span>}
+              {badge && <span className={item.badgeMuted ? "badge muted" : "badge"}>{badge}</span>}
             </Link>
           );
         })}

@@ -22,13 +22,17 @@ export type NavItem = {
   badgeMuted?: boolean;
 };
 
-/** The 5 MVP pillars — the live "Campaign OS" nav. */
+/**
+ * The 5 MVP pillars — the live "Campaign OS" nav. Badges are no longer hardcoded:
+ * Voters (voter count) and Canvassing (active-turf count) get their badges injected
+ * at render from real campaign data; Texting has no real backing count, so no badge.
+ */
 export const PRIMARY_NAV: NavItem[] = [
   { label: "HQ Dashboard", href: "/", icon: LayoutDashboard, kbd: "G H" },
-  { label: "Voters", href: "/voters", icon: Users, badge: "412K", badgeMuted: true },
-  { label: "Canvassing", href: "/canvassing", icon: Map, badge: "8" },
+  { label: "Voters", href: "/voters", icon: Users, badgeMuted: true },
+  { label: "Canvassing", href: "/canvassing", icon: Map },
   { label: "Scripts", href: "/scripts", icon: GitBranch, kbd: "G S" },
-  { label: "Texting", href: "/texting", icon: MessageSquare, badge: "4" },
+  { label: "Texting", href: "/texting", icon: MessageSquare },
 ];
 
 /** The "Coming in V2" shelf — visible but disabled. */

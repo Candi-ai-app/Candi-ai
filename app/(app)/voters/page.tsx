@@ -1,6 +1,6 @@
 import { VotersView } from "@/components/voters/voters-view";
 import { createClient } from "@/utils/supabase/server";
-import { getActiveCampaignId } from "@/lib/campaign";
+import { getActiveCampaign } from "@/lib/campaign";
 import type { Voter, Party } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function VotersPage() {
   // RLS-scoped: returns rows only for campaigns the signed-in user is a member of.
   const supabase = await createClient();
-  const campaignId = await getActiveCampaignId();
+  const campaign = await getActiveCampaign();
+  const campaignId = campaign?.id ?? null;
   const { data } = campaignId
     ? await supabase
         .from("voters")
@@ -18,6 +19,19 @@ export default async function VotersPage() {
         .eq("campaign_id", campaignId)
         .order("last_name", { ascending: true })
     : { data: [] };
+
+  // Real contacted count for the active campaign: distinct voters that have at
+  // least one contact row. Falls back to 0 for empty/unselected campaigns.
+  let contactedCount = 0;
+  if (campaignId) {
+    const { data: contactRows } = await supabase
+      .from("contacts")
+      .select("voter_id")
+      .eq("campaign_id", campaignId)
+      .not("voter_id", "is", null)
+      .limit(50000);
+    contactedCount = new Set((contactRows ?? []).map((r) => r.voter_id as string)).size;
+  }
 
   const voters: Voter[] = (data ?? []).map((r) => ({
     id: (r.external_id as string) ?? "",
@@ -39,5 +53,11 @@ export default async function VotersPage() {
     elections: (r.vote_history as { history?: Record<string, boolean> } | null)?.history ?? {},
   }));
 
-  return <VotersView initialVoters={voters} />;
+  return (
+    <VotersView
+      initialVoters={voters}
+      district={campaign?.district ?? null}
+      contactedCount={contactedCount}
+    />
+  );
 }

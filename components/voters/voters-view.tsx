@@ -62,8 +62,22 @@ function toggleSet<T>(set: Set<T>, val: T): Set<T> {
   return n;
 }
 
-export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
-  const ALL = initialVoters && initialVoters.length ? initialVoters : VOTERS;
+export function VotersView({
+  initialVoters,
+  district,
+  contactedCount,
+}: {
+  initialVoters?: Voter[];
+  /** Active campaign's district label, e.g. "FL-25". Falls back to the demo. */
+  district?: string | null;
+  /** Real distinct-contacted-voter count for the active campaign. */
+  contactedCount?: number;
+}) {
+  const usingLive = !!(initialVoters && initialVoters.length);
+  const ALL = usingLive ? initialVoters! : VOTERS;
+  // District + contacted come from the server for live campaigns; fall back to the
+  // demo values (mock district, contact-history-derived count) when showing mock data.
+  const districtLabel = usingLive ? district ?? "" : CAMPAIGN.district;
   const [selected, setSelected] = useState<string | null>(null);
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
   const [search, setSearch] = useState("");
@@ -110,6 +124,10 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
       total: ALL.length,
     };
   }, [ALL]);
+
+  // Contacted count: the server's real distinct-contacted figure for live
+  // campaigns; the contact-history-derived count for the mock demo set.
+  const contacted = usingLive ? contactedCount ?? 0 : facets.contacted;
 
   // Live count of voters matching the current super-voter (N-of-M) threshold.
   const svCount = useMemo(
@@ -169,8 +187,9 @@ export function VotersView({ initialVoters }: { initialVoters?: Voter[] }) {
         <div>
           <h1>Voters</h1>
           <div className="sub">
-            <span className="mono">{facets.total.toLocaleString()}</span> voters in {CAMPAIGN.district} ·&nbsp;
-            <span className="mono">{facets.contacted.toLocaleString()}</span> contacted ·&nbsp;
+            <span className="mono">{facets.total.toLocaleString()}</span>
+            {districtLabel ? <> voters in {districtLabel}</> : " voters"} ·&nbsp;
+            <span className="mono">{contacted.toLocaleString()}</span> contacted ·&nbsp;
             <span className="mono">{(facets.tagCounts.VBM ?? 0).toLocaleString()}</span> VBM
           </div>
         </div>

@@ -20,16 +20,33 @@ export default async function AppLayout({
   const activeCampaign = await getActiveCampaign();
   if (!activeCampaign) redirect("/select");
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const role = (membership?.role as string) ?? "canvasser";
+  // Run role + nav-badge counts in parallel. All RLS-scoped to the active campaign.
+  const [membershipRes, voterCountRes, turfCountRes] = await Promise.all([
+    supabase.from("memberships").select("role").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("voters")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", activeCampaign.id),
+    // Active turfs back the Canvassing badge (matches the "N active turfs" header).
+    supabase
+      .from("turfs")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", activeCampaign.id)
+      .eq("status", "active"),
+  ]);
+  const role = (membershipRes.data?.role as string) ?? "canvasser";
+  const voterCount = voterCountRes.count ?? 0;
+  const turfCount = turfCountRes.count ?? 0;
 
   return (
     <div className="app density-cozy">
-      <Sidebar role={role} email={user.email ?? ""} activeCampaign={activeCampaign.candidate} />
+      <Sidebar
+        role={role}
+        email={user.email ?? ""}
+        activeCampaign={activeCampaign.candidate}
+        voterCount={voterCount}
+        turfCount={turfCount}
+      />
       <Topbar />
       <main className="canvas">{children}</main>
       <MobileNav role={role} />
