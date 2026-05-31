@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { Filter, Calendar, Sparkles } from "lucide-react";
+import { Filter, Calendar } from "lucide-react";
 import { getRole, isAdminRole } from "@/lib/auth";
+import { getActiveCampaignId } from "@/lib/campaign";
+import { ElectionCallout } from "@/components/election-callout";
 
 // ── placeholder data (wired to Supabase in the Voters/HQ slice) ──────────────
 const velocity = [30, 38, 34, 46, 42, 52, 58, 50, 64, 60, 72, 66, 80, 86];
@@ -44,6 +46,7 @@ const area = `${line} L${(PAD + (velocity.length - 1) * step).toFixed(1)},${CH} 
 export default async function HQPage() {
   // HQ is the campaign command center — owners/directors only.
   if (!isAdminRole(await getRole())) redirect("/canvassing");
+  const campaignId = (await getActiveCampaignId()) ?? "default";
 
   return (
     <div className="hq">
@@ -53,18 +56,13 @@ export default async function HQPage() {
         <div className="acts">
           <button className="btn" type="button"><Filter className="ico" /> Filter</button>
           <button className="btn" type="button"><Calendar className="ico" /> Today</button>
-          <button className="btn accent" type="button"><Sparkles className="ico" /> Ask Candi</button>
         </div>
       </div>
 
       <div className="hq-body">
+        <ElectionCallout daysLeft={171} dateLabel="Nov 3" cyclePct={68} campaignId={campaignId} />
+
         <div className="kpi-row">
-          <div className="kpi dark">
-            <div className="label">Days to election</div>
-            <div className="big">171<span className="unit">· Nov 3</span></div>
-            <div className="bar accent" style={{ marginTop: 6 }}><i style={{ width: "68%" }} /></div>
-            <div className="delta">cycle 68%</div>
-          </div>
           <div className="kpi">
             <div className="label">Doors knocked · today</div>
             <div className="big">500<span className="unit">/ 1,800</span></div>

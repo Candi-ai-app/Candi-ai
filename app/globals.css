@@ -451,6 +451,95 @@ table.t input[type="checkbox"] {
 .theme-dark .kpi .delta.up { color: oklch(0.78 0.14 145); }
 .kpi .delta.down { color: var(--rose); }
 
+/* ── Election / campaign-focus callout (replaces the days-to-election card) ──── */
+.election-callout {
+  display: flex; align-items: stretch; gap: 18px;
+  background: var(--ink); color: var(--bg);
+  border: 1px solid var(--ink); border-radius: var(--radius-lg);
+  padding: 16px 20px; margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+.election-callout .ec-count { display: flex; flex-direction: column; gap: 6px; min-width: 188px; }
+.election-callout .ec-days {
+  font-family: var(--f-serif); font-size: 40px; line-height: 1; letter-spacing: -0.02em;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.election-callout .ec-days span {
+  font-family: var(--f-sans); font-size: 12px; color: oklch(0.72 0.01 250); font-weight: 400; letter-spacing: 0;
+}
+.election-callout .ec-bar { height: 5px; border-radius: 3px; background: oklch(0.32 0.012 250); overflow: hidden; }
+.election-callout .ec-bar i { display: block; height: 100%; background: var(--accent); }
+.election-callout .ec-cycle { font-size: 11px; color: oklch(0.7 0.01 250); }
+.election-callout .ec-focus {
+  flex: 1; display: flex; min-width: 0;
+  border-left: 1px solid oklch(0.32 0.012 250); padding-left: 18px;
+}
+.ec-focus-view {
+  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  background: transparent; border: 0; cursor: text; text-align: left; color: inherit;
+  position: relative; padding-right: 22px;
+}
+.ec-focus-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.62 0.01 250); font-weight: 600; }
+.ec-focus-text { font-size: 14px; line-height: 1.4; color: var(--bg); }
+.ec-focus-text.empty { color: oklch(0.6 0.01 250); font-style: italic; }
+.ec-focus-view .ec-pencil { position: absolute; top: 2px; right: 0; color: oklch(0.6 0.01 250); }
+.ec-focus-view:hover .ec-pencil { color: var(--bg); }
+.ec-edit { flex: 1; display: flex; gap: 8px; align-items: flex-end; }
+.ec-edit textarea {
+  flex: 1; resize: none; border-radius: 8px; border: 1px solid oklch(0.4 0.012 250);
+  background: oklch(0.24 0.012 250); color: var(--bg); padding: 8px 10px;
+  font-size: 13px; font-family: inherit; outline: none;
+}
+.ec-edit textarea::placeholder { color: oklch(0.58 0.01 250); }
+
+/* ── Ask Candi · lower-left Claude chat panel ────────────────────────────────── */
+.ask-candi {
+  position: fixed; left: 18px; bottom: 18px; z-index: 80;
+  width: 380px; max-width: calc(100vw - 36px);
+  height: 540px; max-height: calc(100vh - 96px);
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.ac-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 12px 11px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.ac-head b { font-size: 13px; }
+.ac-mark { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); }
+.ac-x { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.ac-x:hover { color: var(--ink); }
+.ac-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ac-empty { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
+.ac-empty p { margin: 0; }
+.ac-suggest-list { display: flex; flex-direction: column; gap: 6px; }
+.ac-suggest {
+  text-align: left; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-2);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; cursor: pointer;
+}
+.ac-suggest:hover { background: var(--surface-3); color: var(--ink); }
+.ac-msg { font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 90%; }
+.ac-msg.user { align-self: flex-end; background: var(--ink); color: var(--bg); padding: 8px 11px; border-radius: 12px 12px 3px 12px; }
+.ac-msg.assistant { align-self: flex-start; background: var(--surface-2); color: var(--ink); padding: 8px 11px; border-radius: 12px 12px 12px 3px; border: 1px solid var(--border); }
+.ac-typing { color: var(--muted); }
+.ac-input { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+.ac-input textarea {
+  flex: 1; resize: none; max-height: 120px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 11px; font-size: 13px; font-family: inherit; background: var(--surface-2); color: var(--ink); outline: none; line-height: 1.4;
+}
+.ac-input textarea:focus { border-color: var(--accent); }
+.ac-input button {
+  width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 9px; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+}
+.ac-input button:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 768px) {
+  .ask-candi { left: 8px; right: 8px; bottom: 66px; width: auto; max-width: none; height: min(70vh, 520px); }
+  .election-callout { flex-direction: column; gap: 12px; }
+  .election-callout .ec-focus { border-left: 0; border-top: 1px solid oklch(0.32 0.012 250); padding-left: 0; padding-top: 12px; }
+  .election-callout .ec-days { font-size: 34px; }
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -566,7 +655,7 @@ svg.ico { display: block; }
 }
 .kpi-row {
   display: grid;
-  grid-template-columns: 1.05fr 1fr 1fr 1fr 0.95fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 .hq-grid {
@@ -1202,8 +1291,6 @@ svg.ico { display: block; }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 1400px) {
-  .kpi-row { grid-template-columns: 1.1fr 1fr 1fr 1fr; }
-  .kpi-row > .kpi:nth-child(5) { display: none; }
   .hq-grid { grid-template-columns: 1.3fr 1fr; }
 }
 @media (max-width: 1280px) {
@@ -1212,8 +1299,7 @@ svg.ico { display: block; }
   .txt-body  { grid-template-columns: 280px 1fr 300px; }
 }
 @media (max-width: 1150px) {
-  .kpi-row { grid-template-columns: 1.2fr 1fr 1fr; }
-  .kpi-row > .kpi:nth-child(4) { display: none; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 1100px) {
   .topbar .searchbox { display: none; }

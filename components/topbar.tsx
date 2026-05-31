@@ -1,25 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Search, Bell, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Bell, Sparkles } from "lucide-react";
 import { CRUMBS } from "@/lib/nav";
+import { AskCandiPanel } from "@/components/ask-candi";
 
 export function Topbar() {
   const pathname = usePathname();
   const crumb =
     CRUMBS[pathname] ?? CRUMBS[`/${pathname.split("/")[1]}`] ?? "—";
+  const [askOpen, setAskOpen] = useState(false);
 
   return (
     <header className="topbar">
-      <div className="context-pill">
-        <span className="ico-circ">MR</span>
-        <b>Mira Reyes</b>
-        <span className="muted">· State Senate · PA-12</span>
-        <ChevronDown className="chev" style={{ width: 14, height: 14 }} />
-      </div>
-
       <div className="crumbs">
-        <span className="sep">/</span>
         <b>{crumb}</b>
       </div>
 
@@ -37,9 +32,15 @@ export function Topbar() {
       <button className="pill" type="button" aria-label="Notifications">
         <Bell className="ico" />
       </button>
-      <button className="btn accent" type="button">
+      <button
+        className={"btn accent" + (askOpen ? " is-on" : "")}
+        type="button"
+        onClick={() => setAskOpen((v) => !v)}
+      >
         <Sparkles className="ico" /> Ask Candi
       </button>
+
+      <AskCandiPanel open={askOpen} onClose={() => setAskOpen(false)} />
     </header>
   );
 }
