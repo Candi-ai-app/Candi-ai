@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { PRIMARY_NAV, V2_NAV } from "@/lib/nav";
+import { signOut } from "@/app/login/actions";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -64,7 +65,11 @@ export function Sidebar() {
           <b>Sam Park</b>
           <span>Field Director</span>
         </div>
-        <Settings className="ico" aria-label="Settings" style={{ width: 16, height: 16, color: "var(--muted)" }} />
+        <form action={signOut}>
+          <button type="submit" title="Sign out" style={{ border: 0, background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", color: "var(--muted)" }}>
+            <LogOut style={{ width: 16, height: 16 }} />
+          </button>
+        </form>
       </div>
     </aside>
   );

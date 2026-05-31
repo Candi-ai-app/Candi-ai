@@ -1,5 +1,5 @@
 import { VotersView } from "@/components/voters/voters-view";
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import type { Voter, Party } from "@/lib/mock-data";
 
 const CAMPAIGN_ID = "00000000-0000-0000-0000-000000000010"; // demo: Reyes for State Senate
@@ -7,7 +7,8 @@ const CAMPAIGN_ID = "00000000-0000-0000-0000-000000000010"; // demo: Reyes for S
 export const dynamic = "force-dynamic";
 
 export default async function VotersPage() {
-  const supabase = createAdminClient();
+  // RLS-scoped: returns rows only for campaigns the signed-in user is a member of.
+  const supabase = await createClient();
   const { data } = await supabase
     .from("voters")
     .select(
