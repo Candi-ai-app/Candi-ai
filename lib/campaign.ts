@@ -11,6 +11,7 @@ export type ActiveCampaign = {
   office: string | null;
   district: string | null;
   election_date: string | null;
+  photo_url: string | null;
 };
 
 /** The active campaign id from the cookie, or null if none is selected. */
@@ -30,7 +31,7 @@ export async function getActiveCampaign(): Promise<ActiveCampaign | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("campaigns")
-    .select("id, org_id, candidate, office, district, election_date")
+    .select("id, org_id, candidate, office, district, election_date, photo_url")
     .eq("id", id)
     .maybeSingle();
 

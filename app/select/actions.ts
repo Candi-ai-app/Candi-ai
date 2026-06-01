@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { CAMPAIGN_COOKIE } from "@/lib/campaign";
 import { findArea, stateAbbr, SAMPLE_VOTER_COUNT, type AreaCounty } from "@/lib/areas";
@@ -34,18 +35,64 @@ export async function selectCampaign(id: string) {
 }
 
 /**
- * Create a new campaign (owners/directors only), seed a realistic sample voter
- * set scoped to the chosen area, make it active, and go to the dashboard.
+ * Permanently delete a campaign (owners/directors only). RLS already scopes the
+ * delete to the user's orgs; we additionally gate on role so canvassers can't
+ * trigger it. Voters/turfs/contacts cascade away with the campaign. If the
+ * deleted campaign was the active one, the selection cookie is cleared.
+ */
+export async function deleteCampaign(id: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Owners/directors only. Canvassers get a silent no-op.
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const role = (membership?.role as string) ?? "canvasser";
+  if (role !== "owner" && role !== "director") {
+    revalidatePath("/select");
+    return;
+  }
+
+  // RLS limits this to campaigns in the user's orgs; cascade removes children.
+  const { error } = await supabase.from("campaigns").delete().eq("id", id);
+  if (error) {
+    console.error("deleteCampaign:", error.message);
+    revalidatePath("/select");
+    return;
+  }
+
+  // If we just deleted the active campaign, drop the selection cookie so the
+  // app doesn't try to load a campaign that no longer exists.
+  const c = await cookies();
+  if (c.get(CAMPAIGN_COOKIE)?.value === id) c.delete(CAMPAIGN_COOKIE);
+
+  revalidatePath("/select");
+}
+
+/**
+ * Create a new campaign — or finish setting up an existing draft when `id` is
+ * provided (resume flow). Owners/directors only. Seeds a realistic sample voter
+ * set scoped to the chosen area (only if the campaign has none yet), makes it
+ * active, and goes to the dashboard.
  */
 export async function createCampaign(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim(); // present → resume/update
   const candidate = String(formData.get("candidate") ?? "").trim();
   const office = String(formData.get("office") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim();
   const county = String(formData.get("county") ?? "").trim();
   const district = String(formData.get("district") ?? "").trim();
   const electionDate = String(formData.get("election_date") ?? "").trim();
+  const photoUrl = String(formData.get("photo_url") ?? "").trim();
 
-  if (!candidate) redirect("/select/new");
+  const back = id ? `/select/new?resume=${id}` : "/select/new";
+  if (!candidate) redirect(back);
 
   const supabase = await createClient();
   const {
@@ -65,39 +112,65 @@ export async function createCampaign(formData: FormData) {
 
   if (!membership) redirect("/select");
 
-  const { data: created, error } = await supabase
-    .from("campaigns")
-    .insert({
-      org_id: membership.org_id as string,
-      candidate,
-      office: office || null,
-      district: district || null,
-      state: state || null,
-      county: county || null,
-      election_date: electionDate || null,
-    })
-    .select("id")
-    .single();
+  // Stable shape (no conditional keys) so the Supabase client types resolve
+  // cleanly. photo_url is null when no photo was provided.
+  const fields = {
+    candidate,
+    office: office || null,
+    district: district || null,
+    state: state || null,
+    county: county || null,
+    election_date: electionDate || null,
+    photo_url: photoUrl || null,
+  };
 
-  if (error || !created) {
-    console.error("createCampaign:", error?.message);
-    redirect("/select/new");
+  let campaignId: string;
+
+  if (id) {
+    // Resume: update the existing draft in place (RLS scopes to user's orgs).
+    // The Supabase client is untyped (no generated Database types), so .update()
+    // infers its payload as `never`; cast the well-formed payload through unknown.
+    const { data: updated, error: updErr } = await supabase
+      .from("campaigns")
+      .update(fields as unknown as never)
+      .eq("id", id)
+      .select("id")
+      .single();
+    if (updErr || !updated) {
+      console.error("createCampaign (resume):", updErr?.message);
+      redirect(back);
+    }
+    campaignId = updated.id as string;
+  } else {
+    const { data: created, error } = await supabase
+      .from("campaigns")
+      .insert({ org_id: membership.org_id as string, ...fields })
+      .select("id")
+      .single();
+    if (error || !created) {
+      console.error("createCampaign:", error?.message);
+      redirect(back);
+    }
+    campaignId = created.id as string;
   }
 
-  const campaignId = created.id as string;
-
-  // Populate a realistic sample voter set scoped to the new campaign. The
-  // session client is RLS-scoped, but this campaign is in the user's org, so
-  // the with-check passes. Best-effort: a seeding hiccup shouldn't strand the
-  // user on /select — they still land on a (sparse) dashboard.
+  // Seed sample voters scoped to the campaign — but only if it has none yet, so
+  // resuming a draft doesn't double-seed. Best-effort: a seeding hiccup
+  // shouldn't strand the user on /select.
   try {
-    const rows = buildSampleVoters(campaignId, state, county);
-    // Insert in batches to stay well under payload limits.
-    for (let i = 0; i < rows.length; i += 200) {
-      const { error: insErr } = await supabase.from("voters").insert(rows.slice(i, i + 200));
-      if (insErr) {
-        console.error("createCampaign seed:", insErr.message);
-        break;
+    const { count } = await supabase
+      .from("voters")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId);
+    if (!count) {
+      const rows = buildSampleVoters(campaignId, state, county);
+      // Insert in batches to stay well under payload limits.
+      for (let i = 0; i < rows.length; i += 200) {
+        const { error: insErr } = await supabase.from("voters").insert(rows.slice(i, i + 200));
+        if (insErr) {
+          console.error("createCampaign seed:", insErr.message);
+          break;
+        }
       }
     }
   } catch (e) {

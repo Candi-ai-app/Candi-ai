@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,8 +11,11 @@ import {
   CalendarDays,
   Users,
   Loader2,
+  ImagePlus,
+  X,
 } from "lucide-react";
 import { createCampaign } from "@/app/select/actions";
+import { createClient } from "@/utils/supabase/client";
 import type { AreaState } from "@/lib/areas";
 
 type Filled = {
@@ -23,24 +26,46 @@ type Filled = {
   district?: string;
 };
 
+export type ResumeDraft = {
+  id: string;
+  candidate: string | null;
+  office: string | null;
+  district: string | null;
+  state: string | null;
+  county: string | null;
+  election_date: string | null;
+  photo_url: string | null;
+};
+
 const STEPS = ["Basics", "Area", "Review"] as const;
 
 export function CampaignOnboarding({
   areas,
   sampleCount,
+  draft = null,
 }: {
   areas: AreaState[];
   sampleCount: number;
+  /** When present, prefill + UPDATE this draft instead of creating a new one. */
+  draft?: ResumeDraft | null;
 }) {
   const [step, setStep] = useState(0);
 
-  // Form fields.
-  const [candidate, setCandidate] = useState("");
-  const [office, setOffice] = useState("");
-  const [state, setState] = useState("");
-  const [county, setCounty] = useState("");
-  const [district, setDistrict] = useState("");
-  const [electionDate, setElectionDate] = useState("");
+  // Form fields — prefilled from the draft when resuming.
+  const [candidate, setCandidate] = useState(draft?.candidate ?? "");
+  const [office, setOffice] = useState(draft?.office ?? "");
+  const [state, setState] = useState(draft?.state ?? "");
+  const [county, setCounty] = useState(draft?.county ?? "");
+  const [district, setDistrict] = useState(draft?.district ?? "");
+  const [electionDate, setElectionDate] = useState(draft?.election_date ?? "");
+
+  // Candidate photo (optional). `photoUrl` holds an already-uploaded URL (e.g.
+  // from the resumed draft); `photoFile` holds a freshly chosen file to upload.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(draft?.photo_url ?? null);
+  const [photoUrl, setPhotoUrl] = useState<string>(draft?.photo_url ?? "");
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Which fields Candi auto-filled (for the subtle hint).
   const [aiFilled, setAiFilled] = useState<Set<keyof Filled>>(new Set());
@@ -67,6 +92,58 @@ export function CampaignOnboarding({
       next.delete(field);
       return next;
     });
+  }
+
+  function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setPhotoError(null);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Please choose an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError("Image must be under 5 MB.");
+      return;
+    }
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
+
+  function clearPhoto() {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoUrl("");
+    setPhotoError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  /**
+   * Upload the chosen photo to the public `candidates` bucket and return its
+   * public URL. Returns the existing URL if no new file was picked, or null on
+   * failure (the wizard then proceeds without a photo rather than blocking).
+   */
+  async function uploadPhoto(): Promise<string | null> {
+    if (!photoFile) return photoUrl || null;
+    try {
+      const supabase = createClient();
+      const ext = (photoFile.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      // Stable folder per draft; otherwise a unique throwaway prefix.
+      const prefix = draft?.id ?? `new-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const path = `${prefix}/${Date.now()}.${ext || "jpg"}`;
+      const { error } = await supabase.storage
+        .from("candidates")
+        .upload(path, photoFile, { upsert: true, contentType: photoFile.type });
+      if (error) {
+        console.error("photo upload:", error.message);
+        return photoUrl || null;
+      }
+      const { data } = supabase.storage.from("candidates").getPublicUrl(path);
+      return data.publicUrl;
+    } catch (e) {
+      console.error("photo upload threw:", e);
+      return photoUrl || null;
+    }
   }
 
   // State drives the county/district options, so reset downstream picks.
@@ -159,15 +236,20 @@ export function CampaignOnboarding({
 
   function submit() {
     if (submitting) return;
-    const fd = new FormData();
-    fd.set("candidate", candidate.trim());
-    fd.set("office", office.trim());
-    fd.set("state", state);
-    fd.set("county", county);
-    fd.set("district", district);
-    fd.set("election_date", electionDate);
-    startSubmit(() => {
-      // createCampaign seeds voters then redirects to "/".
+    startSubmit(async () => {
+      // Upload the photo (if any) before the action runs — the action redirects,
+      // so we can't do client work after it. Failure is non-blocking.
+      const url = await uploadPhoto();
+      const fd = new FormData();
+      if (draft?.id) fd.set("id", draft.id); // resume → UPDATE in place
+      fd.set("candidate", candidate.trim());
+      fd.set("office", office.trim());
+      fd.set("state", state);
+      fd.set("county", county);
+      fd.set("district", district);
+      fd.set("election_date", electionDate);
+      if (url) fd.set("photo_url", url);
+      // createCampaign seeds voters (if none yet) then redirects to "/".
       void createCampaign(fd);
     });
   }
@@ -180,10 +262,11 @@ export function CampaignOnboarding({
             <span className="brand-mark">C</span>
             Candi <small>v1·MVP</small>
           </div>
-          <h1 className="select-title serif">New campaign</h1>
+          <h1 className="select-title serif">{draft ? "Finish setup" : "New campaign"}</h1>
           <p className="muted select-sub">
-            Set up your workspace in three quick steps. We&rsquo;ll create a realistic sample
-            voter set so you can explore right away.
+            {draft
+              ? "Pick up where you left off — review the details below and finish setting up your workspace."
+              : "Set up your workspace in three quick steps. We’ll create a realistic sample voter set so you can explore right away."}
           </p>
         </header>
 
@@ -271,6 +354,52 @@ export function CampaignOnboarding({
                   autoComplete="off"
                 />
               </Field>
+
+              <div className="onb-field">
+                <span className="onb-field-head">
+                  <span className="onb-label">
+                    Candidate photo
+                    <span className="muted onb-optional"> (optional)</span>
+                  </span>
+                </span>
+                <div className="onb-photo">
+                  <div className="onb-photo-preview" aria-hidden={!photoPreview}>
+                    {photoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- local object URL / remote Storage URL preview
+                      <img src={photoPreview} alt="Candidate preview" />
+                    ) : (
+                      <ImagePlus className="onb-photo-placeholder" aria-hidden />
+                    )}
+                  </div>
+                  <div className="onb-photo-actions">
+                    <input
+                      ref={fileInputRef}
+                      id="onb-photo"
+                      type="file"
+                      accept="image/*"
+                      className="onb-photo-input"
+                      onChange={onPhotoChange}
+                    />
+                    <button
+                      type="button"
+                      className="btn onb-photo-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <ImagePlus style={{ width: 14, height: 14 }} />
+                      {photoPreview ? "Change photo" : "Upload photo"}
+                    </button>
+                    {photoPreview && (
+                      <button type="button" className="btn ghost onb-photo-remove" onClick={clearPhoto}>
+                        <X style={{ width: 14, height: 14 }} />
+                        Remove
+                      </button>
+                    )}
+                    <p className="onb-photo-hint muted">
+                      {photoError ?? "JPG or PNG, up to 5 MB. Shows on the campaign card."}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -372,6 +501,13 @@ export function CampaignOnboarding({
                 value={electionDate || "Not set"}
                 icon={<CalendarDays />}
               />
+              <Summary label="Photo" value={photoPreview ? "Added" : "Not set"} />
+              {draft && (
+                <div className="onb-review-seed">
+                  <Check className="onb-seed-ico" />
+                  Finishing setup for your existing draft — no duplicate campaign is created.
+                </div>
+              )}
               <div className="onb-review-seed">
                 <Users className="onb-seed-ico" />
                 {willSeed ? (
@@ -426,7 +562,7 @@ export function CampaignOnboarding({
                 disabled={submitting || !canNext0}
               >
                 {submitting ? <Loader2 className="onb-spin" /> : <Check style={{ width: 14, height: 14 }} />}
-                {submitting ? "Creating…" : "Create campaign"}
+                {submitting ? "Saving…" : draft ? "Finish setup" : "Create campaign"}
               </button>
             )}
           </div>

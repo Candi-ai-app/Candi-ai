@@ -1454,6 +1454,10 @@ svg.ico { display: block; }
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+.campaign-switch-avatar {
+  width: 28px; height: 28px; flex: 0 0 28px; border-radius: 7px;
+  object-fit: cover; border: 1px solid var(--border);
+}
 .campaign-switch-info { flex: 1; min-width: 0; line-height: 1.25; }
 .campaign-switch-label {
   display: block;

@@ -44,6 +44,7 @@ export default async function AppLayout({
         role={role}
         email={user.email ?? ""}
         activeCampaign={activeCampaign.candidate}
+        activeCampaignPhoto={activeCampaign.photo_url ?? ""}
         voterCount={voterCount}
         turfCount={turfCount}
       />

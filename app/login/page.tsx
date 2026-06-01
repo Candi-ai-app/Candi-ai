@@ -1,4 +1,5 @@
 import { signIn, signUp } from "./actions";
+import { PasswordField } from "@/components/auth/password-field";
 
 export default async function LoginPage({
   searchParams,
@@ -27,7 +28,7 @@ export default async function LoginPage({
         </label>
         <label className="auth-field">
           <span>Password</span>
-          <input className="scr-input" name="password" type="password" placeholder="6+ characters" required minLength={6} autoComplete="current-password" />
+          <PasswordField />
         </label>
 
         {error && (

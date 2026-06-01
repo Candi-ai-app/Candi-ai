@@ -21,12 +21,15 @@ export function Sidebar({
   role = "director",
   email = "",
   activeCampaign = "",
+  activeCampaignPhoto = "",
   voterCount = 0,
   turfCount = 0,
 }: {
   role?: string;
   email?: string;
   activeCampaign?: string;
+  /** Public URL of the active campaign's candidate photo, if any. */
+  activeCampaignPhoto?: string;
   /** Real voter count for the active campaign → Voters nav badge. */
   voterCount?: number;
   /** Real active-turf count for the active campaign → Canvassing nav badge. */
@@ -56,6 +59,16 @@ export function Sidebar({
 
       {activeCampaign && (
         <div className="campaign-switch">
+          {activeCampaignPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element -- remote Supabase Storage URL, fixed small size
+            <img
+              className="campaign-switch-avatar"
+              src={activeCampaignPhoto}
+              alt={`${activeCampaign} photo`}
+              width={28}
+              height={28}
+            />
+          ) : null}
           <div className="campaign-switch-info">
             <span className="campaign-switch-label">Campaign</span>
             <b title={activeCampaign}>{activeCampaign}</b>

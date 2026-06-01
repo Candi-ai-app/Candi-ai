@@ -14,7 +14,7 @@ export default async function SelectCampaignPage() {
   // RLS returns only campaigns in orgs the user is a member of.
   const { data: campaigns } = await supabase
     .from("campaigns")
-    .select("id, candidate, office, district, election_date")
+    .select("id, candidate, office, district, election_date, photo_url")
     .order("candidate", { ascending: true });
 
   const { data: membership } = await supabase
@@ -27,7 +27,7 @@ export default async function SelectCampaignPage() {
   return (
     <CampaignPicker
       campaigns={(campaigns ?? []) as PickerCampaign[]}
-      canCreate={role === "owner" || role === "director"}
+      canManage={role === "owner" || role === "director"}
       email={user.email ?? ""}
     />
   );
