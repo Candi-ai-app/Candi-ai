@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Plus, SlidersHorizontal, Sparkles, Search, Send, Phone, MoreHorizontal,
   X, ChevronDown, MessageSquare, Footprints, Check as CheckIcon, Minus,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Copy, Trash2, Download, Loader2,
 } from "lucide-react";
 import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
 import { MAX_M, voteCount } from "@/lib/elections";
+import { updateVoter, tagVoters } from "@/app/(app)/voters/actions";
 
 const ROW_H = 38;
 
@@ -76,11 +77,19 @@ export function VotersView({
   contactedCount?: number;
 }) {
   const usingLive = !!(initialVoters && initialVoters.length);
-  const ALL = usingLive ? initialVoters! : VOTERS;
+  // Local, mutable copy of the loaded voter set so edits (support, tags) and bulk
+  // tagging reflect immediately in the grid, facets, and detail card. Persisted to
+  // the DB via server actions when live; optimistic-only for the mock demo.
+  const [rows, setRows] = useState<Voter[]>(() => (usingLive ? initialVoters! : VOTERS));
+  const ALL = rows;
   // District + contacted come from the server for live campaigns; fall back to the
   // demo values (mock district, contact-history-derived count) when showing mock data.
   const districtLabel = usingLive ? district ?? "" : CAMPAIGN.district;
   const [selected, setSelected] = useState<string | null>(null);
+  // Checkbox multi-select set (voter ids) for the toolbar bulk actions.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
+  const [, startSave] = useTransition();
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
   const [search, setSearch] = useState("");
   const [quick, setQuick] = useState<string | null>(null);
@@ -175,6 +184,118 @@ export function VotersView({
     setCitySel(new Set());
     setSearch("");
   };
+
+  // Transient toast for bulk-action feedback.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Optimistically patch one voter (support and/or tags) in local state, then
+  // persist to the DB (live campaigns only). On a failed write we revert.
+  const patchVoter = useCallback(
+    (id: string, patch: { support?: number; flags?: string[] }) => {
+      let prev: Voter | undefined;
+      setRows((rs) =>
+        rs.map((v) => {
+          if (v.id !== id) return v;
+          prev = v;
+          return { ...v, ...patch };
+        })
+      );
+      if (!usingLive) return; // mock demo — optimistic only, nothing to persist
+      startSave(async () => {
+        const res = await updateVoter(id, patch);
+        if (!res.ok && prev) {
+          const reverted = prev;
+          setRows((rs) => rs.map((v) => (v.id === id ? reverted : v)));
+          setToast("Couldn't save that change — please try again.");
+        }
+      });
+    },
+    [usingLive]
+  );
+
+  // ── Selection (checkbox) helpers ───────────────────────────────────────────
+  const filteredIds = useMemo(() => filtered.map((v) => v.id), [filtered]);
+  const allFilteredChecked = filteredIds.length > 0 && filteredIds.every((id) => checkedIds.has(id));
+  const someFilteredChecked = filteredIds.some((id) => checkedIds.has(id));
+  const toggleChecked = useCallback((id: string) => {
+    setCheckedIds((s) => toggleSet(s, id));
+  }, []);
+  const toggleAllFiltered = useCallback(() => {
+    setCheckedIds((s) => {
+      const everyOn = filteredIds.length > 0 && filteredIds.every((id) => s.has(id));
+      if (everyOn) {
+        const n = new Set(s);
+        filteredIds.forEach((id) => n.delete(id));
+        return n;
+      }
+      return new Set([...s, ...filteredIds]);
+    });
+  }, [filteredIds]);
+  const clearSelection = useCallback(() => setCheckedIds(new Set()), []);
+
+  // Bulk-tag the checked voters (optimistic), then persist via the bulk action.
+  const bulkTag = useCallback(
+    (tag: string, label: string) => {
+      const ids = [...checkedIds];
+      if (ids.length === 0) return;
+      const idSet = new Set(ids);
+      setRows((rs) =>
+        rs.map((v) =>
+          idSet.has(v.id) && !v.flags.includes(tag) ? { ...v, flags: [...v.flags, tag] } : v
+        )
+      );
+      if (!usingLive) {
+        setToast(`Added ${ids.length.toLocaleString()} voter${ids.length === 1 ? "" : "s"} to the ${label}.`);
+        return;
+      }
+      startSave(async () => {
+        const res = await tagVoters(ids, tag);
+        if (res.ok) {
+          setToast(`Added ${ids.length.toLocaleString()} voter${ids.length === 1 ? "" : "s"} to the ${label}.`);
+        } else {
+          // revert optimistic add
+          setRows((rs) =>
+            rs.map((v) => (idSet.has(v.id) ? { ...v, flags: v.flags.filter((f) => f !== tag) } : v))
+          );
+          setToast(`Couldn't update the ${label} — please try again.`);
+        }
+      });
+    },
+    [checkedIds, usingLive]
+  );
+
+  // Export the checked voters' visible columns to CSV (client-side download).
+  const exportSelection = useCallback(() => {
+    const ids = new Set(checkedIds);
+    const picked = ALL.filter((v) => ids.has(v.id));
+    if (picked.length === 0) return;
+    const headers = ["Voter ID", "Name", "Address", "City", "Zip", "Precinct", "Party", "Age", "Vote history", "Support", "Persuadability", "Phone", "Tags"];
+    const esc = (val: string | number) => {
+      const s = String(val ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const v of picked) {
+      lines.push([
+        v.id, v.name, v.addr, v.city, v.zip, v.precinct, partyFull(v.party),
+        v.age, v.history, v.support, v.persuasion, v.phone, v.flags.join(" | "),
+      ].map(esc).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `candi-voters-${picked.length}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setToast(`Exported ${picked.length.toLocaleString()} voter${picked.length === 1 ? "" : "s"} to CSV.`);
+  }, [ALL, checkedIds]);
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({
@@ -307,7 +428,7 @@ export function VotersView({
               {!railOpen && (
                 <button
                   type="button"
-                  className="btn ghost rail-reopen"
+                  className="btn accent rail-reopen"
                   aria-label="Show filters"
                   aria-expanded={false}
                   onClick={() => setRailOpen(true)}
@@ -329,9 +450,30 @@ export function VotersView({
               {activeCount > 0 && <button className="ai-suggest ghost" style={{ marginLeft: 4 }} type="button" onClick={clearAll}>Clear all</button>}
             </div>
             <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
-              <button className="btn ghost" type="button"><Send style={{ width: 13, height: 13 }} /> Add to text queue</button>
-              <button className="btn ghost" type="button"><Phone style={{ width: 13, height: 13 }} /> Add to call list</button>
-              <button className="btn" type="button"><MoreHorizontal className="ico" /></button>
+              {checkedIds.size > 0 && (
+                <span className="tag accent vot-selcount" aria-live="polite">{checkedIds.size.toLocaleString()} selected</span>
+              )}
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={checkedIds.size === 0}
+                onClick={() => bulkTag("text-queue", "text queue")}
+              >
+                <Send style={{ width: 13, height: 13 }} /> Add to text queue
+              </button>
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={checkedIds.size === 0}
+                onClick={() => bulkTag("call-list", "call list")}
+              >
+                <Phone style={{ width: 13, height: 13 }} /> Add to call list
+              </button>
+              <BulkMenu
+                count={checkedIds.size}
+                onClear={clearSelection}
+                onExport={exportSelection}
+              />
             </div>
           </div>
 
@@ -340,22 +482,43 @@ export function VotersView({
               <div className="vtbl-head" style={{ width: TOTAL_W }}>
                 {COLS.map((c) => (
                   <div key={c.k} className="vcell" style={{ width: c.w }}>
-                    {c.k === "check" ? <input type="checkbox" /> : c.label}
+                    {c.k === "check" ? (
+                      <input
+                        type="checkbox"
+                        aria-label="Select all filtered voters"
+                        checked={allFilteredChecked}
+                        ref={(el) => { if (el) el.indeterminate = !allFilteredChecked && someFilteredChecked; }}
+                        onChange={toggleAllFiltered}
+                        disabled={filteredIds.length === 0}
+                      />
+                    ) : c.label}
                   </div>
                 ))}
               </div>
               <div className="vtbl-body" style={{ height: virt.getTotalSize(), width: TOTAL_W }}>
                 {virt.getVirtualItems().map((vi) => {
                   const v = filtered[vi.index];
+                  const isChecked = checkedIds.has(v.id);
                   return (
                     <div
                       key={v.id}
                       className={"vtbl-row" + (v.id === selected ? " sel" : "")}
                       style={{ height: ROW_H, width: TOTAL_W, transform: `translateY(${vi.start}px)` }}
-                      onClick={() => setSelected(v.id)}
+                      // Click toggles the detail bar: a second click on the open row deselects.
+                      onClick={() => setSelected((cur) => (cur === v.id ? null : v.id))}
                     >
                       {COLS.map((c) => (
-                        <div key={c.k} className="vcell" style={{ width: c.w }}>{cell(v, c.k, v.id === selected)}</div>
+                        <div key={c.k} className="vcell" style={{ width: c.w }}>
+                          {c.k === "check"
+                            ? <input
+                                type="checkbox"
+                                aria-label={`Select ${v.name}`}
+                                checked={isChecked}
+                                onChange={() => toggleChecked(v.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            : cell(v, c.k, v.id === selected)}
+                        </div>
                       ))}
                     </div>
                   );
@@ -369,8 +532,16 @@ export function VotersView({
         </div>
 
         {/* ── Detail drawer ─────────────────────────────────────────── */}
-        {sel && <VoterDetail v={sel} onClose={() => setSelected(null)} />}
+        {sel && (
+          <VoterDetail
+            v={sel}
+            onClose={() => setSelected(null)}
+            onPatch={(patch) => patchVoter(sel.id, patch)}
+          />
+        )}
       </div>
+
+      {toast && <div className="vot-toast" role="status">{toast}</div>}
     </div>
   );
 }
@@ -412,8 +583,18 @@ function cell(v: Voter, k: (typeof COLS)[number]["k"], isSel: boolean) {
   }
 }
 
-function VoterDetail({ v, onClose }: { v: Voter; onClose: () => void }) {
+function VoterDetail({
+  v,
+  onClose,
+  onPatch,
+}: {
+  v: Voter;
+  onClose: () => void;
+  onPatch: (patch: { support?: number; flags?: string[] }) => void;
+}) {
   const initials = v.name.split(" ").map((s) => s[0]).slice(0, 2).join("");
+  // Sanitize phone for tel:/sms: (keep digits + a leading +); empty → buttons disabled.
+  const tel = (v.phone || "").replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
   return (
     <aside className="drawer">
       <div className="drawer-head">
@@ -427,11 +608,13 @@ function VoterDetail({ v, onClose }: { v: Voter; onClose: () => void }) {
         >
           {initials}
         </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{v.name}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
           <div className="muted mono" style={{ fontSize: 11.5 }}>{v.id} · age {v.age}</div>
         </div>
-        <X className="x" style={{ width: 16, height: 16 }} onClick={onClose} />
+        <button type="button" className="x vot-x" aria-label="Close" onClick={onClose}>
+          <X style={{ width: 16, height: 16 }} />
+        </button>
       </div>
 
       <div className="drawer-body">
@@ -445,29 +628,219 @@ function VoterDetail({ v, onClose }: { v: Voter; onClose: () => void }) {
         <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, PA {v.zip}</span></div></div>
         <div className="field-row"><div className="lbl">Precinct</div><div className="val mono">{v.precinct}</div></div>
         <div className="field-row"><div className="lbl">Party</div><div className="val"><span className={`tag ${partyTag(v.party)}`}>{partyFull(v.party)}</span></div></div>
-        <div className="field-row"><div className="lbl">Phone</div><div className="val mono">{v.phone} <span className="muted">· verified</span></div></div>
+        <div className="field-row"><div className="lbl">Phone</div><div className="val mono">{v.phone ? <>{v.phone} <span className="muted">· verified</span></> : <span className="muted">No phone on file</span>}</div></div>
         <div className="field-row"><div className="lbl">Vote history</div><div className="val"><VoteHistory history={v.history} /></div></div>
-        <div className="field-row"><div className="lbl">Support</div><div className="val"><ScoreBar v={v.support} /> &nbsp;<span className="muted">{v.support}/5</span></div></div>
-        <div className="field-row"><div className="lbl">Persuadability</div><div className="val"><ScoreBar v={v.persuasion} kind="persuade" /> &nbsp;<span className="muted">{v.persuasion}/5</span></div></div>
-        <div className="field-row"><div className="lbl">Tags</div><div className="val row" style={{ gap: 4, flexWrap: "wrap" }}>
-          {v.flags.length === 0 && <span className="muted" style={{ fontSize: 12 }}>—</span>}
-          {v.flags.map((f) => <span key={f} className={`tag ${f === "persuadable" ? "accent" : f === "donor" ? "amber" : f === "VBM" ? "teal" : "indigo"}`}>{f}</span>)}
-          <button className="ai-suggest ghost" type="button">+ add tag</button>
+        <div className="field-row"><div className="lbl">Support</div><div className="val row" style={{ gap: 8 }}>
+          <EditableScore value={v.support} onSet={(n) => onPatch({ support: n })} />
+          <span className="muted">{v.support || 0}/5</span>
         </div></div>
+        <div className="field-row"><div className="lbl">Persuadability</div><div className="val"><ScoreBar v={v.persuasion} kind="persuade" /> &nbsp;<span className="muted">{v.persuasion}/5</span></div></div>
+        <div className="field-row"><div className="lbl">Tags</div><div className="val"><TagEditor flags={v.flags} onSet={(flags) => onPatch({ flags })} /></div></div>
 
         <div style={{ marginTop: 18 }}>
           <div className="muted" style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8 }}>Recent contact history</div>
           <Timeline />
         </div>
 
-        <div className="row" style={{ gap: 6, marginTop: 18 }}>
-          <button className="btn" type="button"><Phone style={{ width: 13, height: 13 }} /> Call</button>
-          <button className="btn" type="button"><MessageSquare style={{ width: 13, height: 13 }} /> Text</button>
-          <button className="btn" type="button"><Footprints style={{ width: 13, height: 13 }} /> Add to turf</button>
-          <button className="btn primary" style={{ marginLeft: "auto" }} type="button"><Sparkles style={{ width: 13, height: 13 }} /> Draft msg</button>
+        <div className="row" style={{ gap: 6, marginTop: 18, flexWrap: "wrap" }}>
+          {/* Call / Text → real tel: / sms: links; disabled (greyed) when no phone. */}
+          {tel ? (
+            <a className="btn" href={`tel:${tel}`}><Phone style={{ width: 13, height: 13 }} /> Call</a>
+          ) : (
+            <button className="btn" type="button" disabled title="No phone on file"><Phone style={{ width: 13, height: 13 }} /> Call</button>
+          )}
+          {tel ? (
+            <a className="btn" href={`sms:${tel}`}><MessageSquare style={{ width: 13, height: 13 }} /> Text</a>
+          ) : (
+            <button className="btn" type="button" disabled title="No phone on file"><MessageSquare style={{ width: 13, height: 13 }} /> Text</button>
+          )}
+          {/* Add to turf: no voter↔turf membership model yet — honest interim. */}
+          <button className="btn" type="button" disabled title="Soon — voter-to-turf assignment is coming">
+            <Footprints style={{ width: 13, height: 13 }} /> Add to turf <span className="vot-soon">Soon</span>
+          </button>
+          <DraftButton v={v} />
         </div>
       </div>
     </aside>
+  );
+}
+
+// 1–5 support score, click a pip to set (writes voters.support). Click the active
+// top pip again to clear back to 0 (no support). Optimistic via onSet.
+function EditableScore({ value, onSet }: { value: number; onSet: (n: number) => void }) {
+  return (
+    <div className="score-bar vot-score-edit" role="group" aria-label="Set support score">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={`Set support ${i} of 5`}
+          aria-pressed={i <= value}
+          className={i <= value ? "on" : ""}
+          onClick={() => onSet(value === i ? 0 : i)}
+        />
+      ))}
+    </div>
+  );
+}
+
+const QUICK_TAGS = ["persuadable", "volunteer", "donor", "VBM", "new"];
+function tagTone(f: string): string {
+  return f === "persuadable" ? "accent" : f === "donor" ? "amber" : f === "VBM" ? "teal" : f === "new" ? "" : "indigo";
+}
+
+// Tag editor: removable chips + a "+ add tag" quick-pick (preset tags) and a
+// free-text input. Writes the full flags array via onSet (optimistic + persisted).
+function TagEditor({ flags, onSet }: { flags: string[]; onSet: (flags: string[]) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState("");
+  const add = (raw: string) => {
+    const t = raw.trim();
+    if (!t || flags.includes(t)) { setText(""); setAdding(false); return; }
+    onSet([...flags, t]);
+    setText("");
+    setAdding(false);
+  };
+  const remove = (f: string) => onSet(flags.filter((x) => x !== f));
+  const presets = QUICK_TAGS.filter((t) => !flags.includes(t));
+  return (
+    <div className="vot-tag-editor">
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        {flags.length === 0 && !adding && <span className="muted" style={{ fontSize: 12 }}>—</span>}
+        {flags.map((f) => (
+          <span key={f} className={`tag ${tagTone(f)} vot-tag-chip`}>
+            {f}
+            <button type="button" aria-label={`Remove ${f}`} className="vot-tag-x" onClick={() => remove(f)}>
+              <X style={{ width: 10, height: 10 }} />
+            </button>
+          </span>
+        ))}
+        {!adding && (
+          <button className="ai-suggest ghost" type="button" onClick={() => setAdding(true)}>+ add tag</button>
+        )}
+      </div>
+      {adding && (
+        <div className="vot-tag-add">
+          <input
+            autoFocus
+            value={text}
+            placeholder="New tag…"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") add(text);
+              else if (e.key === "Escape") { setText(""); setAdding(false); }
+            }}
+            onBlur={() => { if (!text.trim()) setAdding(false); }}
+          />
+          <button type="button" className="btn" onClick={() => add(text)} disabled={!text.trim()}>Add</button>
+          {presets.length > 0 && (
+            <div className="vot-tag-presets">
+              {presets.map((t) => (
+                <button key={t} type="button" className="tag vot-tag-preset" onClick={() => add(t)}>+ {t}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Draft msg → AI draft via POST /api/draft (Claude). Opens a small popover panel
+// in the detail card with the generated message; copyable. 503 if key missing.
+function DraftButton({ v }: { v: Voter }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const generate = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setCopied(false);
+    try {
+      const res = await fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: v.name, party: v.party, support: v.support, precinct: v.precinct }),
+      });
+      const text = await res.text();
+      if (!res.ok) { setError(text || "Couldn't draft a message."); setDraft(""); }
+      else setDraft(text);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [v]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !draft && !loading) void generate();
+  };
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(draft); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
+  };
+
+  return (
+    <div className="vot-draft" style={{ marginLeft: "auto", position: "relative" }}>
+      <button className="btn primary" type="button" aria-expanded={open} onClick={toggle}>
+        <Sparkles style={{ width: 13, height: 13 }} /> Draft msg
+      </button>
+      {open && (
+        <div className="vot-draft-pop" role="dialog" aria-label="AI draft message">
+          <div className="vot-draft-head">
+            <span><Sparkles style={{ width: 12, height: 12 }} /> AI draft</span>
+            <X style={{ width: 14, height: 14, cursor: "pointer" }} onClick={() => setOpen(false)} />
+          </div>
+          {loading && <div className="vot-draft-body muted"><Loader2 className="vot-spin" style={{ width: 14, height: 14 }} /> Drafting…</div>}
+          {!loading && error && <div className="vot-draft-body vot-draft-err">{error}</div>}
+          {!loading && !error && draft && <div className="vot-draft-body">{draft}</div>}
+          {!loading && (
+            <div className="vot-draft-acts">
+              <button type="button" className="btn ghost" onClick={generate}>Regenerate</button>
+              {draft && (
+                <button type="button" className="btn" onClick={copy}>
+                  <Copy style={{ width: 12, height: 12 }} /> {copied ? "Copied" : "Copy"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ⋯ bulk-actions menu: Clear selection + Export selection (CSV). Both real.
+function BulkMenu({ count, onClear, onExport }: { count: number; onClear: () => void; onExport: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  return (
+    <div className="vot-menu" ref={ref} style={{ position: "relative" }}>
+      <button className="btn" type="button" aria-label="More actions" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <MoreHorizontal className="ico" />
+      </button>
+      {open && (
+        <div className="vot-menu-pop" role="menu">
+          <button type="button" role="menuitem" disabled={count === 0} onClick={() => { onExport(); setOpen(false); }}>
+            <Download style={{ width: 13, height: 13 }} /> Export selection (CSV){count ? ` · ${count}` : ""}
+          </button>
+          <button type="button" role="menuitem" disabled={count === 0} onClick={() => { onClear(); setOpen(false); }}>
+            <Trash2 style={{ width: 13, height: 13 }} /> Clear selection
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

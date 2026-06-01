@@ -320,6 +320,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   color: var(--ink);
   font-size: 12px; font-weight: 500;
   cursor: pointer;
+  text-decoration: none;          /* so <a class="btn"> (tel:/sms:) reads as a button */
 }
 .btn:hover { background: var(--surface-2); }
 .btn.primary {
@@ -969,6 +970,117 @@ svg.ico { display: block; }
   font-size: 12px;
   flex-wrap: wrap;
 }
+
+/* ── Voters: detail-card + toolbar interactions ─────────────────────────────── */
+/* Detail close (X): a real hit-target so the icon is never clipped at the edge. */
+.drawer-head .x.vot-x {
+  flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px;
+  margin-left: auto; margin-right: -4px;   /* pull back into the header's padding */
+  border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted);
+  cursor: pointer;
+}
+.drawer-head .x.vot-x:hover { background: var(--surface-2); color: var(--ink); }
+
+/* Editable support score — pips become buttons. */
+.vot-score-edit { gap: 3px; }
+.vot-score-edit button {
+  display: block; width: 9px; height: 14px; padding: 0;
+  border: 0; border-radius: 2px;
+  background: var(--mute-3); cursor: pointer;
+  transition: background .12s, transform .08s;
+}
+.vot-score-edit button.on { background: var(--ink); }
+.vot-score-edit button:hover { transform: scaleY(1.12); }
+
+/* Tag editor */
+.vot-tag-editor { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.vot-tag-chip { padding-right: 3px; }
+.vot-tag-x {
+  display: inline-grid; place-items: center;
+  width: 14px; height: 14px; margin-left: 1px;
+  border: 0; border-radius: 3px;
+  background: transparent; color: inherit; opacity: 0.65; cursor: pointer;
+}
+.vot-tag-x:hover { opacity: 1; background: color-mix(in oklch, currentColor 18%, transparent); }
+.vot-tag-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vot-tag-add input {
+  height: 28px; padding: 0 8px; flex: 1; min-width: 110px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); color: var(--ink); font-size: 12px; outline: none;
+}
+.vot-tag-add input:focus { border-color: var(--accent); }
+.vot-tag-presets { display: flex; gap: 4px; flex-wrap: wrap; width: 100%; }
+.vot-tag-preset {
+  cursor: pointer; border: 1px dashed var(--border); background: var(--surface-2); color: var(--ink-2);
+}
+.vot-tag-preset:hover { background: var(--surface-3); color: var(--ink); }
+
+/* "Soon" pill on the honest-interim Add-to-turf button. */
+.vot-soon {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 1px 4px; border-radius: 4px;
+  background: var(--surface-3); color: var(--muted);
+}
+
+/* Draft-msg popover (anchored to the Draft button). */
+.vot-draft-pop {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 30;
+  width: 280px; max-width: 78vw;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px oklch(0 0 0 / 0.18);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.vot-draft-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-bottom: 1px solid var(--hairline);
+  font-size: 11.5px; font-weight: 600; color: var(--ink);
+}
+.vot-draft-head > span { display: inline-flex; align-items: center; gap: 5px; }
+.vot-draft-body { padding: 10px; font-size: 12.5px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
+.vot-draft-body.muted { display: inline-flex; align-items: center; gap: 6px; }
+.vot-draft-err { color: var(--rose); }
+.vot-draft-acts { display: flex; gap: 6px; justify-content: flex-end; padding: 8px 10px; border-top: 1px solid var(--hairline); }
+
+/* ⋯ bulk menu */
+.vot-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  min-width: 210px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px oklch(0 0 0 / 0.18);
+  padding: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.vot-menu-pop button {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 7px 9px; text-align: left;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink);
+  font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.vot-menu-pop button:hover:not(:disabled) { background: var(--surface-2); }
+.vot-menu-pop button:disabled { color: var(--muted); cursor: not-allowed; }
+
+.vot-selcount { font-family: var(--f-sans); }
+
+/* Disabled actions read as non-interactive. */
+.btn:disabled, .drawer .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--surface); }
+.btn.ghost:disabled, .btn.ghost:disabled:hover { background: transparent; color: var(--muted); }
+
+/* Bulk-action toast */
+.vot-toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 60; max-width: 90vw;
+  padding: 10px 16px; border-radius: 8px;
+  background: var(--ink); color: var(--bg);
+  font-size: 12.5px; font-weight: 500;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.22);
+  animation: vot-toast-in .18s ease-out;
+}
+@keyframes vot-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.vot-spin { animation: vot-spin 0.9s linear infinite; }
+@keyframes vot-spin { to { transform: rotate(360deg); } }
 
 .vote-history { display: flex; gap: 4px; }
 .vote-cell {
