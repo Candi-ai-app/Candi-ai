@@ -17,15 +17,13 @@ import "leaflet/dist/leaflet.css";
 import "./landing.css";
 import { AppScreen, PIN, type ScreenName } from "./mocks";
 import { ModuleIcons, SecurityIcons } from "./icons";
+import { ContainerScroll } from "@/components/ui/container-scroll-animation";
 
 const LOGIN = "/login";
 
 export default function WelcomePage() {
   const [peek, setPeek] = useState<ScreenName>("voters");
 
-  const figureRef = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const copyRef = useRef<HTMLDivElement>(null);
   const revealRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -75,61 +73,6 @@ export default function WelcomePage() {
         if (fix) window.removeEventListener("resize", fix);
         map.remove();
       }
-    };
-  }, []);
-
-  // ── ContainerScroll hero tilt — card flattens + scales; headline parallax ──
-  useEffect(() => {
-    const fig = figureRef.current;
-    const card = cardRef.current;
-    const copy = copyRef.current;
-    if (!fig || !card) return;
-
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-    let mobile = window.matchMedia("(max-width:768px)").matches;
-    let ticking = false;
-
-    const settle = () => {
-      // reduced-motion: render the settled (flat) state, no scroll coupling
-      card.style.transform = "rotateX(0deg) scale(1)";
-      if (copy) copy.style.transform = "translateY(0)";
-    };
-
-    const update = () => {
-      ticking = false;
-      const rect = fig.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const center = rect.top + rect.height / 2;
-      const start = vh * 0.95;
-      const end = vh * 0.38;
-      const p = Math.min(Math.max((start - center) / (start - end), 0), 1);
-      const rot = lerp(20, 0, p);
-      const sc = mobile ? lerp(0.7, 0.9, p) : lerp(1.05, 1, p);
-      card.style.transform = `rotateX(${rot}deg) scale(${sc})`;
-      if (copy) copy.style.transform = `translateY(${lerp(0, -50, p)}px)`;
-    };
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      settle();
-      return;
-    }
-
-    const onScroll = () => {
-      if (!ticking) {
-        ticking = true;
-        requestAnimationFrame(update);
-      }
-    };
-    const onResize = () => {
-      mobile = window.matchMedia("(max-width:768px)").matches;
-      update();
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-    update();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
     };
   }, []);
 
@@ -284,43 +227,37 @@ export default function WelcomePage() {
         </div>
       </header>
 
-      {/* HERO */}
+      {/* HERO — copy parallaxes up; the device card tilts flat on scroll (motion) */}
       <section className="hero" id="top">
-        <div className="wrap grid">
-          <div className="copy" ref={copyRef}>
-            <div className="eyebrow-row">
-              <span className="eyebrow">Nonpartisan · AI-native campaign OS</span>
-              <span className="tagchip">Field organizing, ground up</span>
-            </div>
-            <h1 className="h1">Run your whole campaign from one screen.</h1>
-            <p className="sub">
-              Candi is the nonpartisan, AI-native campaign OS — voter targeting, turf-cutting, canvassing,
-              texting, and a live HQ in one place. Built for local and down-ballot campaigns, not just the
-              statewide machine.
-            </p>
-            <div className="cta-row">
-              <Link className="btn btn-primary btn-lg" href={LOGIN}>
-                Book a demo <span className="arr">→</span>
-              </Link>
-              <a className="btn btn-ghost btn-lg" href="#peek">
-                See the platform
-              </a>
-            </div>
-            <div className="cta-note">
-              <span className="d" /> No VAN gatekeeping · set up in a day · your data stays yours
-            </div>
-          </div>
-          <div className="figure cs-figure" ref={figureRef}>
-            <div className="glow" />
-            <div className="cs-card" ref={cardRef} aria-label="Candi HQ">
-              <div className="scr">
-                <div className="screen">
-                  <AppScreen name="hq" />
-                </div>
+        <ContainerScroll
+          titleComponent={
+            <div className="copy">
+              <div className="eyebrow-row">
+                <span className="eyebrow">Nonpartisan · AI-native campaign OS</span>
+                <span className="tagchip">Field organizing, ground up</span>
+              </div>
+              <h1 className="h1">Run your whole campaign from one screen.</h1>
+              <p className="sub">
+                Candi is the nonpartisan, AI-native campaign OS — voter targeting, turf-cutting, canvassing,
+                texting, and a live HQ in one place. Built for local and down-ballot campaigns, not just the
+                statewide machine.
+              </p>
+              <div className="cta-row">
+                <Link className="btn btn-primary btn-lg" href={LOGIN}>
+                  Book a demo <span className="arr">→</span>
+                </Link>
+                <a className="btn btn-ghost btn-lg" href="#peek">
+                  See the platform
+                </a>
+              </div>
+              <div className="cta-note">
+                <span className="d" /> No VAN gatekeeping · set up in a day · your data stays yours
               </div>
             </div>
-          </div>
-        </div>
+          }
+        >
+          <AppScreen name="hq" />
+        </ContainerScroll>
       </section>
 
       {/* TRUST */}
