@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { highestRole } from "@/lib/auth";
 import { CampaignPicker, type PickerCampaign } from "@/components/select/campaign-picker";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +18,11 @@ export default async function SelectCampaignPage() {
     .select("id, candidate, office, district, election_date, photo_url")
     .order("candidate", { ascending: true });
 
-  const { data: membership } = await supabase
+  const { data: memberships } = await supabase
     .from("memberships")
     .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const role = (membership?.role as string) ?? "canvasser";
+    .eq("user_id", user.id);
+  const role = highestRole(memberships);
 
   return (
     <CampaignPicker

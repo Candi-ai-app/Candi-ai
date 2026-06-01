@@ -4,6 +4,7 @@ import { Topbar } from "@/components/topbar";
 import { MobileNav } from "@/components/mobile-nav";
 import { createClient } from "@/utils/supabase/server";
 import { getActiveCampaign } from "@/lib/campaign";
+import { highestRole } from "@/lib/auth";
 
 export default async function AppLayout({
   children,
@@ -22,7 +23,7 @@ export default async function AppLayout({
 
   // Run role + nav-badge counts in parallel. All RLS-scoped to the active campaign.
   const [membershipRes, voterCountRes, turfCountRes] = await Promise.all([
-    supabase.from("memberships").select("role").eq("user_id", user.id).maybeSingle(),
+    supabase.from("memberships").select("role").eq("user_id", user.id),
     supabase
       .from("voters")
       .select("id", { count: "exact", head: true })
@@ -34,7 +35,7 @@ export default async function AppLayout({
       .eq("campaign_id", activeCampaign.id)
       .eq("status", "active"),
   ]);
-  const role = (membershipRes.data?.role as string) ?? "canvasser";
+  const role = highestRole(membershipRes.data);
   const voterCount = voterCountRes.count ?? 0;
   const turfCount = turfCountRes.count ?? 0;
 
