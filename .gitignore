@@ -37,6 +37,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local QA / screenshots (write these to /tmp, never the repo)
+.playwright-mcp/
+/screenshots/
+/*.jpeg
+/*.png
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
