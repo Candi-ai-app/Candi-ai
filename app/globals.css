@@ -1082,6 +1082,36 @@ svg.ico { display: block; }
 .vot-spin { animation: vot-spin 0.9s linear infinite; }
 @keyframes vot-spin { to { transform: rotate(360deg); } }
 
+/* ── Contact-card email link + household ("others at this address") ─────────── */
+.hh-email {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--accent-ink, var(--ink)); font-size: 12.5px; font-weight: 500;
+  text-decoration: none; word-break: break-all;
+}
+.hh-email:hover { text-decoration: underline; }
+.hh-email svg { color: var(--muted); flex-shrink: 0; }
+
+.hh { display: flex; flex-direction: column; gap: 8px; }
+.hh-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  font-weight: 500; color: var(--muted);
+}
+.hh-head svg { color: var(--mute-2); }
+.hh-empty { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.hh-note { font-size: 11px; line-height: 1.4; margin-top: -2px; }
+.hh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.hh-member {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--ink); cursor: pointer; text-align: left;
+  font-size: 12.5px; transition: background 0.12s, border-color 0.12s;
+}
+.hh-member:hover { background: var(--surface-3); border-color: var(--border); }
+.hh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.hh-party { flex-shrink: 0; }
+.hh-age { flex-shrink: 0; font-size: 11.5px; }
+
 .vote-history { display: flex; gap: 4px; }
 .vote-cell {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;

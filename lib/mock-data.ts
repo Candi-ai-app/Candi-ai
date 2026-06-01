@@ -18,6 +18,7 @@ export type Voter = {
   history: string; // e.g. "75% (3/4)"
   last: string; // last-contact label
   phone: string;
+  email?: string; // public email (from the SoE file); absent for mock rows
   flags: string[]; // persuadable | volunteer | donor | VBM | new
   race?: string; // White | Black | Hispanic/Latino | Asian | Other
   gender?: string; // M | F | X

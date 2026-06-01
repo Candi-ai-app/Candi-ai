@@ -86,3 +86,72 @@ export async function tagVoters(
   }
   return { ok: true, count: (data as number) ?? 0 };
 }
+
+/** A household co-resident — the subset of voter fields the detail card shows. */
+export type HouseholdMember = {
+  id: string; // external_id (the key the UI carries as Voter.id)
+  name: string;
+  party: "D" | "R" | "I";
+  age: number;
+  support: number;
+};
+
+/**
+ * Other voters at the selected voter's exact `address` — the "others at this
+ * address" household list in the Voters detail card.
+ *
+ * RLS-scoped (session client) + pinned to the active campaign and the voter's
+ * `external_id`. We first read the selected voter's address, then return the OTHER
+ * voters at that same address (same campaign, excluding self), ordered by last
+ * name and capped at 40 (an apartment building with no unit numbers can collapse
+ * many voters onto one address — the cap keeps the payload bounded; the UI labels
+ * the large-group case so it isn't mistaken for one family).
+ *
+ * Returns `{ address, members }`. A blank/missing address yields no members.
+ */
+export async function getHousehold(
+  externalId: string
+): Promise<{ address: string | null; members: HouseholdMember[] }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId || !externalId) return { address: null, members: [] };
+
+  const supabase = await createClient();
+
+  // 1) The selected voter's address (RLS limits this to the user's campaigns).
+  const { data: self, error: selfErr } = await supabase
+    .from("voters")
+    .select("address")
+    .eq("campaign_id", campaignId)
+    .eq("external_id", externalId)
+    .maybeSingle();
+  if (selfErr || !self) {
+    if (selfErr) console.error("getHousehold(self):", selfErr.message);
+    return { address: null, members: [] };
+  }
+  const address = (self.address as string | null) ?? null;
+  if (!address || !address.trim()) return { address, members: [] };
+
+  // 2) The OTHER voters at that exact address (same campaign, excluding self).
+  //    Index-served by voters_campaign_address_idx (campaign_id, address).
+  const { data, error } = await supabase
+    .from("voters")
+    .select("external_id, first_name, last_name, party, age, support")
+    .eq("campaign_id", campaignId)
+    .eq("address", address)
+    .neq("external_id", externalId)
+    .order("last_name", { ascending: true })
+    .limit(40);
+  if (error) {
+    console.error("getHousehold(members):", error.message);
+    return { address, members: [] };
+  }
+
+  const members: HouseholdMember[] = (data ?? []).map((r) => ({
+    id: (r.external_id as string) ?? "",
+    name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim(),
+    party: ((r.party as string) ?? "I") as "D" | "R" | "I",
+    age: (r.age as number) ?? 0,
+    support: (r.support as number) ?? 0,
+  }));
+  return { address, members };
+}

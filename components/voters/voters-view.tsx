@@ -5,11 +5,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Plus, SlidersHorizontal, Sparkles, Search, Send, Phone, MoreHorizontal,
   X, ChevronDown, MessageSquare, Footprints, Check as CheckIcon, Minus,
-  PanelLeftClose, PanelLeftOpen, Copy, Trash2, Download, Loader2,
+  PanelLeftClose, PanelLeftOpen, Copy, Trash2, Download, Loader2, Mail, Users,
 } from "lucide-react";
 import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
 import { MAX_M, voteCount } from "@/lib/elections";
-import { updateVoter, tagVoters } from "@/app/(app)/voters/actions";
+import { updateVoter, tagVoters, getHousehold, type HouseholdMember } from "@/app/(app)/voters/actions";
 
 const ROW_H = 38;
 
@@ -537,6 +537,7 @@ export function VotersView({
             v={sel}
             onClose={() => setSelected(null)}
             onPatch={(patch) => patchVoter(sel.id, patch)}
+            onSelect={(id) => setSelected(id)}
           />
         )}
       </div>
@@ -587,14 +588,18 @@ function VoterDetail({
   v,
   onClose,
   onPatch,
+  onSelect,
 }: {
   v: Voter;
   onClose: () => void;
   onPatch: (patch: { support?: number; flags?: string[] }) => void;
+  /** Switch the selected voter (used by the household list to pivot to a co-resident). */
+  onSelect: (id: string) => void;
 }) {
   const initials = v.name.split(" ").map((s) => s[0]).slice(0, 2).join("");
   // Sanitize phone for tel:/sms: (keep digits + a leading +); empty → buttons disabled.
   const tel = (v.phone || "").replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
+  const email = (v.email || "").trim();
   return (
     <aside className="drawer">
       <div className="drawer-head">
@@ -629,6 +634,11 @@ function VoterDetail({
         <div className="field-row"><div className="lbl">Precinct</div><div className="val mono">{v.precinct}</div></div>
         <div className="field-row"><div className="lbl">Party</div><div className="val"><span className={`tag ${partyTag(v.party)}`}>{partyFull(v.party)}</span></div></div>
         <div className="field-row"><div className="lbl">Phone</div><div className="val mono">{v.phone ? <>{v.phone} <span className="muted">· verified</span></> : <span className="muted">No phone on file</span>}</div></div>
+        <div className="field-row"><div className="lbl">Email</div><div className="val">
+          {email
+            ? <a className="hh-email" href={`mailto:${email}`} title={`Email ${v.name}`}><Mail style={{ width: 12, height: 12 }} /> {email}</a>
+            : <span className="muted">No email on file</span>}
+        </div></div>
         <div className="field-row"><div className="lbl">Vote history</div><div className="val"><VoteHistory history={v.history} /></div></div>
         <div className="field-row"><div className="lbl">Support</div><div className="val row" style={{ gap: 8 }}>
           <EditableScore value={v.support} onSet={(n) => onPatch({ support: n })} />
@@ -636,6 +646,8 @@ function VoterDetail({
         </div></div>
         <div className="field-row"><div className="lbl">Persuadability</div><div className="val"><ScoreBar v={v.persuasion} kind="persuade" /> &nbsp;<span className="muted">{v.persuasion}/5</span></div></div>
         <div className="field-row"><div className="lbl">Tags</div><div className="val"><TagEditor flags={v.flags} onSet={(flags) => onPatch({ flags })} /></div></div>
+
+        <Household voterId={v.id} onSelect={onSelect} />
 
         <div style={{ marginTop: 18 }}>
           <div className="muted" style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8 }}>Recent contact history</div>
@@ -662,6 +674,69 @@ function VoterDetail({
         </div>
       </div>
     </aside>
+  );
+}
+
+// "Others at this address" — co-residents of the selected voter, fetched on the
+// client via getHousehold (RLS-scoped, active campaign). Clicking a member pivots
+// the detail card to that person. Large groups (a building with no unit numbers)
+// are labelled as such so they aren't mistaken for one family.
+const HH_BUILDING_THRESHOLD = 10; // > this ⇒ treat as a building, not a household
+function Household({ voterId, onSelect }: { voterId: string; onSelect: (id: string) => void }) {
+  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<HouseholdMember[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setMembers([]);
+    getHousehold(voterId)
+      .then((res) => { if (live) setMembers(res.members); })
+      .catch(() => { if (live) setMembers([]); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [voterId]);
+
+  const n = members.length;
+  const isBuilding = n > HH_BUILDING_THRESHOLD;
+  // Heading: household for a normal group; "building" framing for large stacks.
+  const heading = loading
+    ? "Household"
+    : n === 0
+      ? "Household"
+      : isBuilding
+        ? `${n.toLocaleString()} voters at this building`
+        : `Household · ${n} at this address`;
+
+  return (
+    <div className="hh" style={{ marginTop: 18 }}>
+      <div className="hh-head">
+        <Users style={{ width: 12, height: 12 }} />
+        <span>{heading}</span>
+      </div>
+      {loading ? (
+        <div className="hh-empty muted"><Loader2 className="vot-spin" style={{ width: 13, height: 13 }} /> Loading…</div>
+      ) : n === 0 ? (
+        <div className="hh-empty muted">Only voter at this address.</div>
+      ) : (
+        <>
+          {isBuilding && (
+            <div className="hh-note muted">Same street address — units aren&apos;t broken out in the voter file.</div>
+          )}
+          <ul className="hh-list">
+            {members.map((m) => (
+              <li key={m.id}>
+                <button type="button" className="hh-member" onClick={() => onSelect(m.id)} title={`Open ${m.name}`}>
+                  <span className="hh-name">{m.name || "—"}</span>
+                  <span className={`tag ${partyTag(m.party)} hh-party`}>{partyLabel(m.party)}</span>
+                  {m.age ? <span className="hh-age muted mono">{m.age}</span> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 

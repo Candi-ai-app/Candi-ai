@@ -413,6 +413,7 @@ try {
       state: "FL",
       zip: z5 || null,
       phone: (r.Telephone_Number ?? "").toString().trim() || null,
+      email: (r.Public_Email_Address ?? "").toString().trim() || null,
       support: null, // real voters — never fabricate
       persuasion: null,
       vote_history: {}, // this export has NO per-election history
@@ -430,7 +431,7 @@ try {
   }
   console.log(`  ✓ ${rows.length.toLocaleString()} active voters mapped`);
   console.log(`  • ${skippedInactive.toLocaleString()} inactive/non-ACT skipped`);
-  console.log(`  • ${emailsSeen.toLocaleString()} rows carry a public email (no voters.email column yet — skipped)`);
+  console.log(`  • ${emailsSeen.toLocaleString()} rows carry a public email → voters.email`);
 
   // masked sample so we can eyeball the mapping without leaking PII
   console.log("\n  masked sample (mapped):");
