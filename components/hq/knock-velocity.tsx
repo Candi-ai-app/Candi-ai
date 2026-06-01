@@ -1,22 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-// Live "Knock velocity" chart. The page computes three per-day series over the
-// last 14 days and passes them in; the Doors / Contacts / Support tags toggle
-// which series renders. Default metric = these three; swappable later.
-type Metric = "doors" | "contacts" | "support";
+type SeriesKey = "doors" | "contacts" | "support";
 
-const METRICS: { k: Metric; label: string; tag: string }[] = [
-  { k: "doors", label: "Doors", tag: "accent" },
-  { k: "contacts", label: "Contacts", tag: "indigo" },
-  { k: "support", label: "Support", tag: "" },
+const SERIES: { label: string; key: SeriesKey; color: string }[] = [
+  { label: "Doors", key: "doors", color: "var(--accent)" },
+  { label: "Contacts", key: "contacts", color: "var(--indigo)" },
+  { label: "Support", key: "support", color: "var(--teal)" },
 ];
 
-// chart geometry (matches the prior mock's proportions)
-const CW = 620;
-const CH = 150;
-const PAD = 12;
+const CW = 640;
+const CH = 176;
+const PAD = 14;
+const TOP = 16; // headroom above tallest bar
+const BOT = 20; // room for day labels
+const PLOT = CH - TOP - BOT;
 
 export function KnockVelocity({
   days,
@@ -29,88 +28,119 @@ export function KnockVelocity({
   contacts: number[];
   support: number[];
 }) {
-  const [metric, setMetric] = useState<Metric>("doors");
+  const [active, setActive] = useState<SeriesKey>("doors");
+  const [hover, setHover] = useState<number | null>(null);
 
-  const series = metric === "doors" ? doors : metric === "contacts" ? contacts : support;
-
-  const { bars, line, area, peak } = useMemo(() => {
-    const n = Math.max(series.length, 1);
-    const step = n > 1 ? (CW - PAD * 2) / (n - 1) : 0;
-    // Scale to the tallest value across ALL series so toggling keeps a stable
-    // y-axis (a metric never looks bigger just because its own max is smaller).
-    const peakVal = Math.max(1, ...doors, ...contacts, ...support);
-    const usable = CH - 24;
-    const pts = series.map((v, i) => [PAD + i * step, CH - (v / peakVal) * usable] as const);
-    const lineD = pts
-      .map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
-      .join(" ");
-    const areaD = pts.length
-      ? `${lineD} L${(PAD + (n - 1) * step).toFixed(1)},${CH} L${PAD},${CH} Z`
-      : "";
-    const barEls = series.map((v, i) => {
-      const h = (v / peakVal) * usable;
-      return { x: PAD + i * step - 5, y: CH - h, h };
-    });
-    return { bars: barEls, line: lineD, area: areaD, peak: peakVal };
-  }, [series, doors, contacts, support]);
-
-  const total = series.reduce((a, b) => a + b, 0);
+  const data = active === "doors" ? doors : active === "contacts" ? contacts : support;
+  const s = SERIES.find((x) => x.key === active)!;
+  const max = Math.max(1, ...data);
+  const n = data.length;
+  const step = n > 1 ? (CW - PAD * 2) / (n - 1) : 0;
+  const x = (i: number) => PAD + i * step;
+  const y = (v: number) => TOP + PLOT - (v / max) * PLOT;
+  const pts = data.map((v, i) => [x(i), y(v)] as const);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const area = pts.length ? `${line} L${x(n - 1).toFixed(1)},${TOP + PLOT} L${PAD},${TOP + PLOT} Z` : "";
+  const total = data.reduce((a, b) => a + b, 0);
+  const empty = data.every((v) => v === 0);
 
   return (
     <div className="card hq-trend">
       <div className="card-head">
         <h3>Knock velocity</h3>
         <span className="sub">· last 14 days</span>
-        <div className="acts" role="tablist" aria-label="Chart metric">
-          {METRICS.map((m) => (
+        <div className="acts">
+          {SERIES.map((it) => (
             <button
-              key={m.k}
+              key={it.key}
               type="button"
-              role="tab"
-              aria-selected={metric === m.k}
-              onClick={() => setMetric(m.k)}
-              className={`tag${m.tag ? ` ${m.tag}` : ""}`}
-              style={{
-                cursor: "pointer",
-                border: "none",
-                opacity: metric === m.k ? 1 : 0.4,
-              }}
+              className={"tag" + (active === it.key ? " accent" : "")}
+              onClick={() => setActive(it.key)}
+              style={{ cursor: "pointer", border: 0 }}
             >
-              {m.label}
+              {it.label}
             </button>
           ))}
         </div>
       </div>
       <div className="card-body">
-        {total === 0 ? (
-          <div className="muted" style={{ fontSize: 12.5, padding: "32px 0", textAlign: "center" }}>
-            No {metric} logged in the last 14 days yet.
+        {empty ? (
+          <div className="muted" style={{ padding: "48px 0", textAlign: "center", fontSize: 13 }}>
+            No {active} recorded in the last 14 days yet.
           </div>
         ) : (
-          <svg
-            viewBox={`0 0 ${CW} ${CH}`}
-            style={{ width: "100%", height: 200, display: "block" }}
-            aria-label={`${metric} per day, peak ${peak}`}
-          >
-            {bars.map((b, i) => (
-              <rect
-                key={i}
-                x={b.x}
-                y={b.y}
-                width={10}
-                height={Math.max(b.h, 0)}
-                rx={2}
-                fill="var(--ink)"
-                opacity={0.85}
-              >
-                <title>
-                  {days[i]}: {series[i]}
-                </title>
-              </rect>
-            ))}
-            <path d={area} fill="var(--accent)" opacity={0.18} />
-            <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} />
-          </svg>
+          <>
+            <div className="hq-trend-meta">
+              <span>
+                <b>{total.toLocaleString()}</b> {s.label.toLowerCase()} · 14 days
+              </span>
+              <span className="muted mono">peak {max.toLocaleString()}/day</span>
+            </div>
+            <svg
+              viewBox={`0 0 ${CW} ${CH}`}
+              style={{ width: "100%", height: 196, display: "block" }}
+              role="img"
+              aria-label={`${s.label} per day over the last 14 days`}
+            >
+              <line x1={PAD} y1={TOP + PLOT} x2={CW - PAD} y2={TOP + PLOT} stroke="var(--hairline)" strokeWidth={1} />
+
+              {data.map((v, i) => {
+                const h = (v / max) * PLOT;
+                const on = hover === i;
+                return (
+                  <rect
+                    key={i}
+                    x={x(i) - 6}
+                    y={TOP + PLOT - h}
+                    width={12}
+                    height={Math.max(h, 0.5)}
+                    rx={2}
+                    fill={s.color}
+                    opacity={on ? 0.5 : 0.18}
+                    onMouseEnter={() => setHover(i)}
+                    onMouseLeave={() => setHover(null)}
+                  >
+                    <title>{`${days[i]}: ${v.toLocaleString()} ${s.label.toLowerCase()}`}</title>
+                  </rect>
+                );
+              })}
+
+              <path d={area} fill={s.color} opacity={0.12} />
+              <path d={line} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+
+              {hover !== null && (
+                <>
+                  <circle cx={x(hover)} cy={y(data[hover])} r={3.5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+                  <text
+                    x={Math.min(Math.max(x(hover), 22), CW - 22)}
+                    y={y(data[hover]) - 8}
+                    textAnchor="middle"
+                    fontSize={11}
+                    fontWeight={600}
+                    fill="var(--ink)"
+                  >
+                    {data[hover].toLocaleString()}
+                  </text>
+                </>
+              )}
+
+              {days.map((d, i) =>
+                i % 3 === 0 || i === n - 1 ? (
+                  <text
+                    key={i}
+                    x={x(i)}
+                    y={CH - 5}
+                    textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
+                    fontSize={10}
+                    fill="var(--mute-2)"
+                    fontFamily="var(--f-mono)"
+                  >
+                    {d}
+                  </text>
+                ) : null
+              )}
+            </svg>
+          </>
         )}
       </div>
     </div>
