@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
+import { Sparkles, X, ChevronDown } from "lucide-react";
 
 type Suggestion = {
   id: string;
@@ -69,23 +70,27 @@ export function CandiSuggests() {
       </div>
       <div className="card-body flush">
         {items.length === 0 ? (
-          <div className="cs-empty muted">
-            All caught up — no suggestions right now.
+          <div className="cs-empty">
+            <span className="cs-empty-ico" aria-hidden>
+              <Sparkles strokeWidth={1.75} />
+            </span>
+            <b>All caught up</b>
+            <span className="muted">No suggestions right now.</span>
           </div>
         ) : (
           <>
             {visible.map((s) => (
               <div className="insight" key={s.id}>
-                <div className="row" style={{ alignItems: "flex-start", gap: 12 }}>
+                <div className="cs-row">
                   <div className="conf-ring" style={{ ["--c"]: s.c } as CSSProperties}>
                     <span>{Math.round(s.c * 100)}</span>
                   </div>
-                  <div className="col" style={{ gap: 6, minWidth: 0 }}>
-                    <b style={{ fontSize: 13 }}>{s.title}</b>
-                    <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
+                  <div className="col cs-main">
+                    <b className="cs-title">{s.title}</b>
+                    <span className="muted cs-body">
                       {s.body}
                     </span>
-                    <div className="row" style={{ gap: 6, marginTop: 2 }}>
+                    <div className="cs-foot">
                       {s.tags.map((t) => (
                         <span className="tag" key={t}>
                           {t}
@@ -94,9 +99,10 @@ export function CandiSuggests() {
                       <button
                         type="button"
                         className="cs-dismiss"
-                        style={{ marginLeft: "auto" }}
                         onClick={() => dismiss(s.id)}
+                        aria-label={`Dismiss: ${s.title}`}
                       >
+                        <X strokeWidth={2} aria-hidden />
                         Dismiss
                       </button>
                     </div>
@@ -113,6 +119,7 @@ export function CandiSuggests() {
                 aria-expanded={expanded}
               >
                 {expanded ? "View less" : `View more (${hiddenCount})`}
+                <ChevronDown className={"cs-more-chev" + (expanded ? " up" : "")} strokeWidth={2} aria-hidden />
               </button>
             )}
           </>

@@ -430,13 +430,15 @@ table.t input[type="checkbox"] {
 
 /* ── KPI cards ─────────────────────────────────────────────────────────────── */
 .kpi {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px 18px 14px;
   display: flex; flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
+  min-height: 116px;          /* equal heights across the row */
   box-shadow: var(--shadow-card);
 }
 .kpi.tint  { background: var(--tint); }
@@ -444,20 +446,28 @@ table.t input[type="checkbox"] {
 .kpi.dark .label { color: oklch(0.7 0.01 250); }
 .kpi.dark .big   { color: var(--bg); }
 .kpi.dark .big .unit { color: oklch(0.7 0.01 250); }
-.kpi .label { font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi .big   { font-family: var(--f-serif); font-size: 34px; line-height: 1.05; color: var(--ink); letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi.dark .kpi-ico { color: oklch(0.62 0.01 250); }
+.kpi .label { font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 22px; }
+.kpi .big   { font-family: var(--f-serif); font-size: 34px; line-height: 1.05; color: var(--ink); letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .kpi .big .unit { font-family: var(--f-sans); font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
-.kpi .delta { font-family: var(--f-mono); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.kpi .delta { font-family: var(--f-mono); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-top: auto; }
 .kpi .delta.up { color: oklch(0.48 0.14 145); }
 .theme-dark .kpi .delta.up { color: oklch(0.78 0.14 145); }
 .kpi .delta.down { color: var(--rose); }
+/* Low-emphasis scannability icon, pinned to the card's top-right. */
+.kpi-ico {
+  position: absolute; top: 14px; right: 14px;
+  width: 17px; height: 17px;
+  color: var(--mute-2);
+  pointer-events: none;
+}
 
 /* ── Election / campaign-focus callout (replaces the days-to-election card) ──── */
 .election-callout {
   display: flex; align-items: stretch; gap: 18px;
   background: var(--ink); color: var(--bg);
   border: 1px solid var(--ink); border-radius: var(--radius-lg);
-  padding: 16px 20px; margin-bottom: 12px;
+  padding: 16px 20px;
   box-shadow: var(--shadow-card);
 }
 .election-callout .ec-count { display: flex; flex-direction: column; gap: 6px; min-width: 188px; }
@@ -476,21 +486,27 @@ table.t input[type="checkbox"] {
   border-left: 1px solid oklch(0.32 0.012 250); padding-left: 18px;
 }
 .ec-focus-view {
-  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; justify-content: center;
   background: transparent; border: 0; cursor: text; text-align: left; color: inherit;
-  position: relative; padding-right: 22px;
+  position: relative; padding: 6px 22px 6px 10px; margin: -6px -10px;
+  border-radius: 9px;
+  transition: background 0.12s ease;
 }
+.ec-focus-view:hover { background: oklch(0.26 0.012 250); }
+.ec-focus-view:focus-visible { outline: none; background: oklch(0.26 0.012 250); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 70%, transparent); }
 .ec-focus-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.62 0.01 250); font-weight: 600; }
 .ec-focus-text { font-size: 14px; line-height: 1.4; color: var(--bg); }
-.ec-focus-text.empty { color: oklch(0.6 0.01 250); font-style: italic; }
-.ec-focus-view .ec-pencil { position: absolute; top: 2px; right: 0; color: oklch(0.6 0.01 250); }
-.ec-focus-view:hover .ec-pencil { color: var(--bg); }
+.ec-focus-text.empty { color: oklch(0.66 0.01 250); font-style: italic; }
+.ec-focus-view .ec-pencil { position: absolute; top: 8px; right: 8px; color: oklch(0.58 0.01 250); transition: color 0.12s ease; }
+.ec-focus-view:hover .ec-pencil, .ec-focus-view:focus-visible .ec-pencil { color: var(--bg); }
 .ec-edit { flex: 1; display: flex; gap: 8px; align-items: flex-end; }
 .ec-edit textarea {
   flex: 1; resize: none; border-radius: 8px; border: 1px solid oklch(0.4 0.012 250);
   background: oklch(0.24 0.012 250); color: var(--bg); padding: 8px 10px;
   font-size: 13px; font-family: inherit; outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
+.ec-edit textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 35%, transparent); }
 .ec-edit textarea::placeholder { color: oklch(0.58 0.01 250); }
 
 /* ── Ask Candi · lower-left Claude chat panel ────────────────────────────────── */
@@ -685,8 +701,16 @@ svg.ico { display: block; }
 .insight {
   padding: 14px 16px;
   border-bottom: 1px solid var(--hairline);
+  transition: background 0.12s ease;
 }
 .insight:last-child { border-bottom: 0; }
+.insight:hover { background: color-mix(in oklch, var(--surface) 86%, var(--tint)); }
+/* Insight row layout — confidence ring + body, top-aligned. */
+.cs-row { display: flex; align-items: flex-start; gap: 12px; }
+.cs-main { gap: 5px; min-width: 0; }
+.cs-title { font-size: 13px; line-height: 1.35; letter-spacing: -0.005em; }
+.cs-body  { font-size: 12px; line-height: 1.45; }
+.cs-foot  { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
 .conf-ring {
   width: 36px; height: 36px; border-radius: 50%;
   display: grid; place-items: center;
@@ -694,9 +718,10 @@ svg.ico { display: block; }
   position: relative; flex-shrink: 0;
   font-family: var(--f-mono); font-size: 10.5px; font-weight: 600;
   color: var(--ink);
+  margin-top: 1px;
 }
 .conf-ring::before {
-  content: ""; position: absolute; inset: 4px;
+  content: ""; position: absolute; inset: 3.5px;
   background: var(--surface); border-radius: 50%;
   z-index: 0;
 }
@@ -705,17 +730,21 @@ svg.ico { display: block; }
 
 /* Candi suggests — Dismiss + View more controls and empty state. */
 .cs-dismiss {
-  display: inline-flex; align-items: center;
-  padding: 3px 9px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: auto;
+  padding: 3px 9px 3px 7px; border-radius: 999px;
   background: transparent;
-  border: 1px dashed color-mix(in oklch, var(--accent) 50%, var(--border));
-  color: var(--ink-2);
+  border: 1px solid transparent;
+  color: var(--muted);
   font: inherit; font-size: 11.5px; font-weight: 500;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
-.cs-dismiss:hover { background: var(--surface-2); color: var(--ink); }
-.cs-dismiss:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
+.cs-dismiss svg { width: 12px; height: 12px; }
+.cs-dismiss:hover { background: var(--surface-2); color: var(--ink); border-color: var(--border); }
+.cs-dismiss:focus-visible { outline: none; color: var(--ink); box-shadow: 0 0 0 2px var(--accent-2); }
 .cs-more {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
   width: 100%;
   padding: 10px 16px;
   background: transparent; border: 0; border-top: 1px solid var(--hairline);
@@ -723,12 +752,27 @@ svg.ico { display: block; }
   font: inherit; font-size: 12px; font-weight: 600;
   cursor: pointer;
   margin-top: auto; /* pin to the bottom of the stretched card */
+  transition: background 0.12s ease;
 }
 .cs-more:hover { background: var(--surface-2); }
 .cs-more:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-2); }
+.cs-more-chev { width: 14px; height: 14px; transition: transform 0.16s ease; }
+.cs-more-chev.up { transform: rotate(180deg); }
 .cs-empty {
-  padding: 28px 16px; text-align: center; font-size: 12.5px;
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 32px 16px; text-align: center;
 }
+.cs-empty-ico {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; margin-bottom: 4px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 18%, var(--surface));
+  color: var(--accent-ink);
+}
+.cs-empty-ico svg { width: 17px; height: 17px; }
+.cs-empty b { font-size: 13px; color: var(--ink); }
+.cs-empty .muted { font-size: 12px; }
 
 /* Range + series toggles for the knock-velocity chart. */
 .hq-trend-ctl { display: inline-flex; gap: 4px; }
@@ -740,6 +784,23 @@ svg.ico { display: block; }
 }
 .canv-row:last-child, .turf-row:last-child, .act-row:last-child { border-bottom: 0; }
 .canv-row:hover, .turf-row:hover, .act-row:hover { background: var(--surface-2); }
+
+/* Canvassers-in-field rows — consistent rhythm + aligned doors column. */
+.canv-row { min-height: 52px; gap: 11px; transition: background 0.12s ease; }
+.canv-row .avatar { width: 30px; height: 30px; flex: 0 0 30px; font-size: 11.5px; }
+.canv-id { flex: 1; min-width: 0; gap: 1px; }
+.canv-name { font-size: 12.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canv-turf { font-size: 11.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canv-doors {
+  flex: 0 0 auto; text-align: right;
+  font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.canv-doors b { font-size: 13px; color: var(--ink-2); font-weight: 600; margin-right: 3px; }
+/* "live" dot in the section header — nudge for optical alignment with the sub. */
+.canv-live { margin-left: 2px; }
+.canv-empty { padding: 22px 16px; font-size: 12.5px; line-height: 1.5; }
 
 .batt { display: flex; align-items: center; gap: 6px; }
 .batt-shell {

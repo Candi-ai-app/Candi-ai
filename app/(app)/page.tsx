@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Footprints, MessageSquare, ThumbsUp, Mail } from "lucide-react";
 import { getRole, isAdminRole } from "@/lib/auth";
 import { getActiveCampaign, getActiveCampaignId } from "@/lib/campaign";
 import { createClient } from "@/utils/supabase/server";
@@ -218,11 +219,13 @@ export default async function HQPage() {
 
         <div className="kpi-row">
           <div className="kpi">
+            <Footprints className="kpi-ico" aria-hidden strokeWidth={1.75} />
             <div className="label">Doors knocked · today</div>
             <div className="big">{nf.format(doorsToday)}</div>
             <div className="delta">{nf.format(doorAttempts)} door attempts total</div>
           </div>
           <div className="kpi">
+            <MessageSquare className="kpi-ico" aria-hidden strokeWidth={1.75} />
             <div className="label">Contacts made</div>
             <div className="big">
               {nf.format(contactsMade)}
@@ -231,11 +234,13 @@ export default async function HQPage() {
             <div className="delta">contact rate</div>
           </div>
           <div className="kpi">
+            <ThumbsUp className="kpi-ico" aria-hidden strokeWidth={1.75} />
             <div className="label">Supporters ID&apos;d</div>
             <div className="big">{nf.format(supportersIdd)}<span className="unit">· 4–5 score</span></div>
             <div className="delta">this cycle</div>
           </div>
           <div className="kpi">
+            <Mail className="kpi-ico" aria-hidden strokeWidth={1.75} />
             <div className="label">VBM flagged</div>
             <div className="big">{nf.format(vbmReturned)}</div>
             <div className="delta">vote-by-mail voters</div>
@@ -251,23 +256,23 @@ export default async function HQPage() {
             <div className="card-head">
               <h3>Canvassers in field</h3>
               <span className="sub">· {canvassers.length} {canvassers.length === 1 ? "canvasser" : "canvassers"}</span>
-              {canvassers.length > 0 && <span className="dot live" style={{ marginLeft: 2 }} />}
+              {canvassers.length > 0 && <span className="dot live canv-live" />}
             </div>
             <div className="card-body flush">
               {canvassers.length === 0 ? (
-                <div className="muted" style={{ fontSize: 12.5, padding: "20px 16px" }}>
+                <div className="canv-empty muted">
                   No canvassers assigned to this campaign yet.
                 </div>
               ) : (
                 canvassers.map((c) => (
                   <div className="canv-row" key={c.id}>
                     <div className="avatar">{c.initials}</div>
-                    <div className="col" style={{ flex: 1, minWidth: 0 }}>
-                      <b style={{ fontSize: 12.5 }}>{c.name}</b>
-                      <span className="muted" style={{ fontSize: 11.5 }}>{c.turf}</span>
+                    <div className="col canv-id">
+                      <b className="canv-name">{c.name}</b>
+                      <span className="muted canv-turf">{c.turf}</span>
                     </div>
-                    <span className="mono" style={{ width: 86, textAlign: "right", color: "var(--ink-2)" }}>
-                      {nf.format(c.doors)} doors
+                    <span className="canv-doors mono">
+                      <b>{nf.format(c.doors)}</b> doors
                     </span>
                   </div>
                 ))
