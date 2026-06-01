@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { CAMPAIGN_COOKIE } from "@/lib/campaign";
+import { highestRole, isAdminRole } from "@/lib/auth";
 import { findArea, stateAbbr, SAMPLE_VOTER_COUNT, type AreaCounty } from "@/lib/areas";
 
 const COOKIE_OPTS = {
@@ -47,14 +48,14 @@ export async function deleteCampaign(id: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Owners/directors only. Canvassers get a silent no-op.
-  const { data: membership } = await supabase
+  // Owners/directors only. A user can belong to multiple orgs, so fetch ALL
+  // memberships and take the highest role — `.maybeSingle()` errors on 2+ rows,
+  // which was silently dropping every delete to a canvasser no-op.
+  const { data: memberships } = await supabase
     .from("memberships")
     .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const role = (membership?.role as string) ?? "canvasser";
-  if (role !== "owner" && role !== "director") {
+    .eq("user_id", user.id);
+  if (!isAdminRole(highestRole(memberships))) {
     revalidatePath("/select");
     return;
   }
