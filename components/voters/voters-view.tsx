@@ -615,7 +615,11 @@ function VoterDetail({
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
-          <div className="muted mono" style={{ fontSize: 11.5 }}>{v.id} · age {v.age}</div>
+          <div className="muted mono" style={{ fontSize: 11.5 }}>
+            {v.id} · age {v.age}
+            {/* VAN id (campaign-tool id), shown only when the voter was VAN-enriched. */}
+            {v.vanid && <> · VAN <span title="VAN Voter File ID">{v.vanid}</span></>}
+          </div>
         </div>
         <button type="button" className="x vot-x" aria-label="Close" onClick={onClose}>
           <X style={{ width: 16, height: 16 }} />
@@ -634,6 +638,11 @@ function VoterDetail({
         {/* Identity */}
         <DetailSection title="Identity">
           <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, PA {v.zip}</span></div></div>
+          {/* Mailing address — only when present AND different from residence (set
+              upstream in the voters page). Helps reach voters who get mail elsewhere. */}
+          {v.mailingAddress && (
+            <div className="field-row"><div className="lbl">Mailing</div><div className="val">{v.mailingAddress}</div></div>
+          )}
           <div className="field-row"><div className="lbl">Precinct</div><div className="val mono">{v.precinct}</div></div>
           <div className="field-row"><div className="lbl">Party</div><div className="val"><span className={`tag ${partyTag(v.party)}`}>{partyFull(v.party)}</span></div></div>
           <div className="field-row"><div className="lbl">Age</div><div className="val mono">{v.age || <span className="muted">—</span>}</div></div>

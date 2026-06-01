@@ -421,6 +421,9 @@ try {
       registration_date: isoDate(r.Registration_Date),
       race: mapRace(r.Race),
       gender: mapGender(r.Sex),
+      // vanid / mailing_address: NOT in the SoE export — they're enriched
+      // out-of-band from a VAN export by scripts/enrich-voter-van.mjs (matched on
+      // first+last+address+zip), so we leave them unset here (default null).
       geom: null, // filled after geocoding
       // geocoder-only (stripped before insert)
       _geoStreet: address ?? "",

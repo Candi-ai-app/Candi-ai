@@ -23,6 +23,8 @@ export type Voter = {
   race?: string; // White | Black | Hispanic/Latino | Asian | Other
   gender?: string; // M | F | X
   elections?: Record<string, boolean>; // per-election turnout, e.g. { "2024G": true, ... }
+  vanid?: string; // VAN "Voter File VANID" (campaign-tool id); from the VAN enrichment, absent for mock rows
+  mailingAddress?: string; // composed one-line mailing address from VAN; absent unless it differs from residence
 };
 
 // Build the per-election history map from a "(got/total)" history string,

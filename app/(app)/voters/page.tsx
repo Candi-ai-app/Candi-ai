@@ -14,7 +14,7 @@ export default async function VotersPage() {
     ? await supabase
         .from("voters")
         .select(
-          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, email, support, persuasion, vote_history, flags, race, gender"
+          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, email, support, persuasion, vote_history, flags, race, gender, vanid, mailing_address"
         )
         .eq("campaign_id", campaignId)
         .order("last_name", { ascending: true })
@@ -32,6 +32,31 @@ export default async function VotersPage() {
       .limit(50000);
     contactedCount = new Set((contactRows ?? []).map((r) => r.voter_id as string)).size;
   }
+
+  // Decide whether a VAN mailing address is the SAME place as the residence, so we
+  // only surface a Mailing row when it's genuinely different. The stored
+  // mailing_address is a full one-line string ("123 NW 4 St, City, FL 33311") while
+  // `address` is street-only, so compare just the mailing STREET (before the first
+  // comma). Tokenize both (uppercase, drop punctuation), and treat them as the same
+  // place when one token list is a prefix of the other — that absorbs unit-suffix
+  // differences (e.g. residence "123 NW 4 ST APT 2" vs mailing "123 NW 4 St").
+  const sameAddr = (mailing?: string | null, residence?: string | null) => {
+    const toks = (s?: string | null) =>
+      (s ?? "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .filter(Boolean);
+    const mailStreet = (mailing ?? "").split(",")[0];
+    const a = toks(mailStreet);
+    const b = toks(residence);
+    if (a.length === 0 || b.length === 0) return false;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) if (a[i] !== b[i]) return false;
+    return true; // one is a prefix of the other ⇒ same place
+  };
 
   const voters: Voter[] = (data ?? []).map((r) => ({
     id: (r.external_id as string) ?? "",
@@ -52,6 +77,12 @@ export default async function VotersPage() {
     race: (r.race as string) ?? undefined,
     gender: (r.gender as string) ?? undefined,
     elections: (r.vote_history as { history?: Record<string, boolean> } | null)?.history ?? {},
+    vanid: (r.vanid as string) || undefined,
+    // Surface the mailing address only when present AND different from residence.
+    mailingAddress:
+      r.mailing_address && !sameAddr(r.mailing_address as string, r.address as string)
+        ? (r.mailing_address as string)
+        : undefined,
   }));
 
   return (
