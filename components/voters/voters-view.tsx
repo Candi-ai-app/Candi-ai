@@ -622,58 +622,88 @@ function VoterDetail({
         </button>
       </div>
 
-      <div className="drawer-body">
+      <div className="drawer-body vd-body">
+        {/* AI strip (persuasion insight) — unchanged behavior. */}
         {v.persuasion >= 4 && (
-          <div className="ai-strip" style={{ marginBottom: 14 }}>
+          <div className="ai-strip vd-ai">
             <div className="ai-mark">AI</div>
             <span>High persuasion · likely <b>housing</b>-motivated. Try renter-relief talking point.</span>
           </div>
         )}
 
-        <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, PA {v.zip}</span></div></div>
-        <div className="field-row"><div className="lbl">Precinct</div><div className="val mono">{v.precinct}</div></div>
-        <div className="field-row"><div className="lbl">Party</div><div className="val"><span className={`tag ${partyTag(v.party)}`}>{partyFull(v.party)}</span></div></div>
-        <div className="field-row"><div className="lbl">Phone</div><div className="val mono">{v.phone ? <>{v.phone} <span className="muted">· verified</span></> : <span className="muted">No phone on file</span>}</div></div>
-        <div className="field-row"><div className="lbl">Email</div><div className="val">
-          {email
-            ? <a className="hh-email" href={`mailto:${email}`} title={`Email ${v.name}`}><Mail style={{ width: 12, height: 12 }} /> {email}</a>
-            : <span className="muted">No email on file</span>}
-        </div></div>
-        <div className="field-row"><div className="lbl">Vote history</div><div className="val"><VoteHistory history={v.history} /></div></div>
-        <div className="field-row"><div className="lbl">Support</div><div className="val row" style={{ gap: 8 }}>
-          <EditableScore value={v.support} onSet={(n) => onPatch({ support: n })} />
-          <span className="muted">{v.support || 0}/5</span>
-        </div></div>
-        <div className="field-row"><div className="lbl">Persuadability</div><div className="val"><ScoreBar v={v.persuasion} kind="persuade" /> &nbsp;<span className="muted">{v.persuasion}/5</span></div></div>
-        <div className="field-row"><div className="lbl">Tags</div><div className="val"><TagEditor flags={v.flags} onSet={(flags) => onPatch({ flags })} /></div></div>
+        {/* Identity */}
+        <DetailSection title="Identity">
+          <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, PA {v.zip}</span></div></div>
+          <div className="field-row"><div className="lbl">Precinct</div><div className="val mono">{v.precinct}</div></div>
+          <div className="field-row"><div className="lbl">Party</div><div className="val"><span className={`tag ${partyTag(v.party)}`}>{partyFull(v.party)}</span></div></div>
+          <div className="field-row"><div className="lbl">Age</div><div className="val mono">{v.age || <span className="muted">—</span>}</div></div>
+        </DetailSection>
 
+        {/* Contact */}
+        <DetailSection title="Contact">
+          <div className="field-row"><div className="lbl">Phone</div><div className="val mono">{v.phone ? <>{v.phone} <span className="muted">· verified</span></> : <span className="muted">No phone on file</span>}</div></div>
+          <div className="field-row"><div className="lbl">Email</div><div className="val">
+            {email
+              ? <a className="hh-email" href={`mailto:${email}`} title={`Email ${v.name}`}><Mail style={{ width: 12, height: 12 }} /> {email}</a>
+              : <span className="muted">No email on file</span>}
+          </div></div>
+        </DetailSection>
+
+        {/* Scores — editable support pips + persuasion */}
+        <DetailSection title="Scores">
+          <div className="field-row"><div className="lbl">Support</div><div className="val row" style={{ gap: 8 }}>
+            <EditableScore value={v.support} onSet={(n) => onPatch({ support: n })} />
+            <span className="muted">{v.support || 0}/5</span>
+          </div></div>
+          <div className="field-row"><div className="lbl">Persuadability</div><div className="val row" style={{ gap: 8 }}><ScoreBar v={v.persuasion} kind="persuade" /><span className="muted">{v.persuasion}/5</span></div></div>
+          <div className="field-row"><div className="lbl">Vote history</div><div className="val"><VoteHistory history={v.history} /></div></div>
+        </DetailSection>
+
+        {/* Tags — editable chips + add-tag */}
+        <DetailSection title="Tags">
+          <TagEditor flags={v.flags} onSet={(flags) => onPatch({ flags })} />
+        </DetailSection>
+
+        {/* Household — others at this address */}
         <Household voterId={v.id} onSelect={onSelect} />
 
-        <div style={{ marginTop: 18 }}>
-          <div className="muted" style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8 }}>Recent contact history</div>
+        {/* Activity — recent contact / timeline */}
+        <DetailSection title="Activity">
           <Timeline />
-        </div>
+        </DetailSection>
+      </div>
 
-        <div className="row" style={{ gap: 6, marginTop: 18, flexWrap: "wrap" }}>
-          {/* Call / Text → real tel: / sms: links; disabled (greyed) when no phone. */}
-          {tel ? (
-            <a className="btn" href={`tel:${tel}`}><Phone style={{ width: 13, height: 13 }} /> Call</a>
-          ) : (
-            <button className="btn" type="button" disabled title="No phone on file"><Phone style={{ width: 13, height: 13 }} /> Call</button>
-          )}
-          {tel ? (
-            <a className="btn" href={`sms:${tel}`}><MessageSquare style={{ width: 13, height: 13 }} /> Text</a>
-          ) : (
-            <button className="btn" type="button" disabled title="No phone on file"><MessageSquare style={{ width: 13, height: 13 }} /> Text</button>
-          )}
-          {/* Add to turf: no voter↔turf membership model yet — honest interim. */}
-          <button className="btn" type="button" disabled title="Soon — voter-to-turf assignment is coming">
-            <Footprints style={{ width: 13, height: 13 }} /> Add to turf <span className="vot-soon">Soon</span>
-          </button>
-          <DraftButton v={v} />
-        </div>
+      {/* Actions — pinned at the bottom of the card */}
+      <div className="vd-actions">
+        {/* Call / Text → real tel: / sms: links; disabled (greyed) when no phone. */}
+        {tel ? (
+          <a className="btn" href={`tel:${tel}`}><Phone style={{ width: 13, height: 13 }} /> Call</a>
+        ) : (
+          <button className="btn" type="button" disabled title="No phone on file"><Phone style={{ width: 13, height: 13 }} /> Call</button>
+        )}
+        {tel ? (
+          <a className="btn" href={`sms:${tel}`}><MessageSquare style={{ width: 13, height: 13 }} /> Text</a>
+        ) : (
+          <button className="btn" type="button" disabled title="No phone on file"><MessageSquare style={{ width: 13, height: 13 }} /> Text</button>
+        )}
+        {/* Add to turf: no voter↔turf membership model yet — honest interim. */}
+        <button className="btn" type="button" disabled title="Soon — voter-to-turf assignment is coming">
+          <Footprints style={{ width: 13, height: 13 }} /> Add to turf <span className="vot-soon">Soon</span>
+        </button>
+        <DraftButton v={v} />
       </div>
     </aside>
+  );
+}
+
+// Labeled section for the detail card: a small uppercase header + grouped body,
+// with consistent vertical rhythm between sections. Purely presentational.
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="vd-section">
+      <h3 className="vd-section-h">{title}</h3>
+      <div className="vd-section-body">{children}</div>
+    </section>
   );
 }
 
@@ -709,8 +739,8 @@ function Household({ voterId, onSelect }: { voterId: string; onSelect: (id: stri
         : `Household · ${n} at this address`;
 
   return (
-    <div className="hh" style={{ marginTop: 18 }}>
-      <div className="hh-head">
+    <section className="vd-section hh">
+      <div className="hh-head vd-section-h">
         <Users style={{ width: 12, height: 12 }} />
         <span>{heading}</span>
       </div>
@@ -736,7 +766,7 @@ function Household({ voterId, onSelect }: { voterId: string; onSelect: (id: stri
           </ul>
         </>
       )}
-    </div>
+    </section>
   );
 }
 

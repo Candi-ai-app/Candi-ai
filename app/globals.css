@@ -610,7 +610,9 @@ table.t input[type="checkbox"] {
   background: transparent;
   border: 1px dashed color-mix(in oklch, var(--accent) 50%, var(--border));
   color: var(--ink-2);
+  cursor: pointer;
 }
+.ai-suggest.ghost:hover { color: var(--ink); border-color: color-mix(in oklch, var(--accent) 70%, var(--border)); }
 
 /* ── Skinny progress ───────────────────────────────────────────────────────── */
 .bar {
@@ -997,13 +999,13 @@ svg.ico { display: block; }
 .vtbl-head {
   display: flex; align-items: center;
   position: sticky; top: 0; z-index: 2;
-  height: 30px;
+  height: 32px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
 .vtbl-head .vcell {
-  font-size: 11px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+  font-size: 10.5px; color: var(--mute-2);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
 }
 .vtbl-body { position: relative; }
 .vtbl-row {
@@ -1012,9 +1014,13 @@ svg.ico { display: block; }
   border-bottom: 1px solid var(--hairline);
   background: var(--surface);
   cursor: pointer;
+  /* Color-only state changes (no transforms) keep rows from shifting on hover. */
+  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 .vtbl-row:hover { background: var(--surface-2); }
-.vtbl-row.sel { background: var(--tint); }
+/* Selected row reads clearly above hover: tint fill + a lime inset spine. */
+.vtbl-row.sel { background: var(--tint); box-shadow: inset 2px 0 0 var(--accent); }
+.vtbl-row.sel:hover { background: color-mix(in oklch, var(--tint) 84%, var(--accent)); }
 .vcell {
   display: flex; align-items: center; gap: 6px;
   padding: 0 12px; min-width: 0;
@@ -1022,7 +1028,12 @@ svg.ico { display: block; }
   flex-shrink: 0;
   font-size: 12.5px;
 }
-.vtbl-row .vcell input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--ink); }
+.vtbl-row .vcell input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--ink); cursor: pointer; }
+.vtbl-head .vcell input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--ink); cursor: pointer; }
+/* Score bars in the grid read a touch more solid than the faint default track. */
+.vtbl-row .score-bar i { width: 6px; height: 12px; border-radius: 2px; }
+/* Compact tag chips in the table's Tags column. */
+.vtbl-row .tag { height: 17px; font-size: 10.5px; }
 .vot-toolbar {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 16px;
@@ -1045,6 +1056,54 @@ svg.ico { display: block; }
 }
 .drawer-head .x.vot-x:hover { background: var(--surface-2); color: var(--ink); }
 
+/* ── Voters detail card — labeled sections + pinned actions ─────────────────── */
+/* Body scrolls; actions stay pinned at the bottom of the card. */
+.vd-body { padding: 14px 16px 8px; }
+.vd-ai { margin-bottom: 16px; }
+
+/* Even vertical rhythm between sections; a hairline separates each one. */
+.vd-section { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--hairline); }
+.vd-section:first-of-type { padding-top: 0; margin-top: 0; border-top: 0; }
+/* The AI strip already sits above; drop the first section's top border after it. */
+.vd-ai + .vd-section { padding-top: 0; margin-top: 0; border-top: 0; }
+.vd-section-h {
+  margin: 0 0 4px;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--mute-2);
+}
+.vd-section-body { display: flex; flex-direction: column; }
+
+/* Tighter, cleaner field rows inside a section: aligned label/value, no per-row
+   borders (the section header + spacing already groups them). */
+.vd-section-body .field-row {
+  padding: 5px 0; border-bottom: 0; gap: 10px;
+  align-items: baseline;
+}
+.vd-section-body .field-row .lbl { width: 92px; font-size: 11.5px; line-height: 1.5; }
+.vd-section-body .field-row .val { line-height: 1.5; }
+/* Rows whose value is an interactive control center on the label baseline. */
+.vd-section-body .field-row .val.row { align-items: center; }
+
+/* Household sits as a section too — reuse the section header rhythm; keep its icon. */
+.vd-section.hh { gap: 6px; }
+.vd-section.hh .hh-head { margin: 0; }
+
+/* Pinned action bar at the foot of the detail card. */
+.vd-actions {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+/* Consistent, non-shifting focus ring for the detail card's clickable controls. */
+.vd-actions .btn:focus-visible,
+.drawer .hh-email:focus-visible,
+.drawer .ai-suggest.ghost:focus-visible {
+  outline: none; box-shadow: 0 0 0 2px var(--accent-2); border-radius: 6px;
+}
+
 /* Editable support score — pips become buttons. */
 .vot-score-edit { gap: 3px; }
 .vot-score-edit button {
@@ -1055,6 +1114,7 @@ svg.ico { display: block; }
 }
 .vot-score-edit button.on { background: var(--ink); }
 .vot-score-edit button:hover { transform: scaleY(1.12); }
+.vot-score-edit button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
 
 /* Tag editor */
 .vot-tag-editor { display: flex; flex-direction: column; gap: 8px; width: 100%; }
@@ -1066,6 +1126,7 @@ svg.ico { display: block; }
   background: transparent; color: inherit; opacity: 0.65; cursor: pointer;
 }
 .vot-tag-x:hover { opacity: 1; background: color-mix(in oklch, currentColor 18%, transparent); }
+.vot-tag-x:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--accent-2); }
 .vot-tag-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .vot-tag-add input {
   height: 28px; padding: 0 8px; flex: 1; min-width: 110px;
@@ -1140,6 +1201,7 @@ svg.ico { display: block; }
   animation: vot-toast-in .18s ease-out;
 }
 @keyframes vot-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes vd-sheet-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 .vot-spin { animation: vot-spin 0.9s linear infinite; }
 @keyframes vot-spin { to { transform: rotate(360deg); } }
 
@@ -1155,8 +1217,9 @@ svg.ico { display: block; }
 .hh { display: flex; flex-direction: column; gap: 8px; }
 .hh-head {
   display: flex; align-items: center; gap: 6px;
-  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  font-weight: 500; color: var(--muted);
+  /* Match the unified detail-card section header (.vd-section-h). */
+  font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-weight: 600; color: var(--mute-2);
 }
 .hh-head svg { color: var(--mute-2); }
 .hh-empty { display: flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -1169,6 +1232,7 @@ svg.ico { display: block; }
   font-size: 12.5px; transition: background 0.12s, border-color 0.12s;
 }
 .hh-member:hover { background: var(--surface-3); border-color: var(--border); }
+.hh-member:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-2); }
 .hh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .hh-party { flex-shrink: 0; }
 .hh-age { flex-shrink: 0; font-size: 11.5px; }
@@ -1660,7 +1724,17 @@ svg.ico { display: block; }
   .module-head h1 { font-size: 19px; }
   .vot-body, .vot-body.detail-open  { grid-template-columns: 200px 1fr; }
   .vot-body.rail-collapsed, .vot-body.rail-collapsed.detail-open { grid-template-columns: 1fr; }
-  .vot-body  > .drawer { display: none; }
+  /* Detail card becomes a full-width bottom sheet so it isn't a cramped column.
+     The table stays visible/usable above it. */
+  .vot-body  > .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: auto; max-height: 82vh;
+    border-left: 0; border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22);
+    z-index: 58;
+    animation: vd-sheet-in 0.2s ease-out;
+  }
   .turf-body, .turf-body.detail-open { grid-template-columns: 250px 1fr; }
   .turf-body > .drawer { display: none; }
   .txt-body  { grid-template-columns: 280px 1fr; }
