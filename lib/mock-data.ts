@@ -12,6 +12,7 @@ export type Voter = {
   precinct: string;
   addr: string;
   city: string;
+  state?: string; // "FL", "PA", … (from the voter file); mock rows default to PA in the UI
   zip: string;
   support: number; // 1–5
   persuasion: number; // 0–5

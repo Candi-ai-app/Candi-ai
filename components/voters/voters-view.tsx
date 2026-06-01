@@ -637,7 +637,7 @@ function VoterDetail({
 
         {/* Identity */}
         <DetailSection title="Identity">
-          <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, PA {v.zip}</span></div></div>
+          <div className="field-row"><div className="lbl">Address</div><div className="val">{v.addr}<br /><span className="muted">{v.city}, {v.state || "PA"} {v.zip}</span></div></div>
           {/* Mailing address — only when present AND different from residence (set
               upstream in the voters page). Helps reach voters who get mail elsewhere. */}
           {v.mailingAddress && (

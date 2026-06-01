@@ -14,7 +14,7 @@ export default async function VotersPage() {
     ? await supabase
         .from("voters")
         .select(
-          "external_id, first_name, last_name, age, party, precinct, address, city, zip, phone, email, support, persuasion, vote_history, flags, race, gender, vanid, mailing_address"
+          "external_id, first_name, last_name, age, party, precinct, address, city, state, zip, phone, email, support, persuasion, vote_history, flags, race, gender, vanid, mailing_address"
         )
         .eq("campaign_id", campaignId)
         .order("last_name", { ascending: true })
@@ -66,6 +66,7 @@ export default async function VotersPage() {
     precinct: (r.precinct as string) ?? "",
     addr: (r.address as string) ?? "",
     city: (r.city as string) ?? "",
+    state: (r.state as string) || undefined,
     zip: (r.zip as string) ?? "",
     phone: (r.phone as string) ?? "",
     email: (r.email as string) ?? undefined,
