@@ -16,7 +16,7 @@ import Link from "next/link";
 import "leaflet/dist/leaflet.css";
 import "./landing.css";
 import { AppScreen, PIN, type ScreenName } from "./mocks";
-import { ModuleIcons, SecurityIcons } from "./icons";
+import { ModuleIcons } from "./icons";
 import { ContainerScroll } from "@/components/ui/container-scroll-animation";
 
 const LOGIN = "/login";
@@ -212,7 +212,6 @@ export default function WelcomePage() {
           <nav className="links">
             <a href="#product">Product</a>
             <a href="#peek">Platform</a>
-            <a href="#security">Security</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
           </nav>
@@ -490,41 +489,6 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* SECURITY */}
-      <section className="sec sec-dark" id="security">
-        <div className="wrap">
-          <div className="sec-head">
-            <span className="kick eyebrow" style={{ color: "var(--accent)" }}>
-              <span className="dot" /> Security &amp; compliance
-            </span>
-            <h2 className="sec-title">Built for the trust a campaign runs on.</h2>
-            <p className="sec-sub">Voter data is sensitive and regulated. Candi treats it that way from day one.</p>
-          </div>
-          <div className="secgrid">
-            <div className="scard">
-              <div className="ic">{SecurityIcons.sc1}</div>
-              <h4>SOC 2 Type II</h4>
-              <p>Independently audited controls across security, availability, and confidentiality.</p>
-            </div>
-            <div className="scard">
-              <div className="ic">{SecurityIcons.sc2}</div>
-              <h4>Encrypted end to end</h4>
-              <p>TLS in transit, AES-256 at rest. Field-level encryption on voter PII.</p>
-            </div>
-            <div className="scard">
-              <div className="ic">{SecurityIcons.sc3}</div>
-              <h4>Role-based access</h4>
-              <p>Granular permissions and full audit logs — staff see only what their role allows.</p>
-            </div>
-            <div className="scard">
-              <div className="ic">{SecurityIcons.sc4}</div>
-              <h4>TCPA &amp; opt-out aware</h4>
-              <p>Texting compliance, consent tracking, and suppression handled automatically.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* PRICING */}
       <section className="sec price" id="pricing">
         <div className="wrap">
@@ -723,7 +687,6 @@ export default function WelcomePage() {
             <div className="col">
               <h5>Company</h5>
               <a href="#top">About</a>
-              <a href="#security">Security</a>
               <a href="#pricing">Pricing</a>
               <a href="#top">Careers</a>
             </div>
