@@ -5,36 +5,17 @@ import { getActiveCampaign, getActiveCampaignId } from "@/lib/campaign";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { ElectionCallout } from "@/components/election-callout";
-import { KnockVelocity } from "@/components/hq/knock-velocity";
+import { KnockVelocity, type ContactPoint } from "@/components/hq/knock-velocity";
+import { CandiSuggests } from "@/components/hq/candi-suggests";
 
 export const dynamic = "force-dynamic";
 
-// ── static (later AI feature) ────────────────────────────────────────────────
-// "Candi suggests" stays static for now — wiring it to the modeling/AI pipeline
-// is a separate feature. Flagged "Preview" in the UI so it reads as not-yet-live.
-const suggestions = [
-  {
-    c: 0.86,
-    title: "Re-canvass Precinct 12S tomorrow AM",
-    body: "67% of 12S doors were not-home 2–5 PM. Modeled response jumps to 41% at 10 AM Saturday.",
-    tags: ["Turf", "Modeling"],
-  },
-  {
-    c: 0.79,
-    title: "Move 220 renters to the renter-relief script",
-    body: "High-persuasion renters in 07N respond better to housing messaging than the default.",
-    tags: ["Script", "Persuasion"],
-  },
-  {
-    c: 0.72,
-    title: "Text 480 outstanding VBM ballots",
-    body: "Chase vote-by-mail no-returns before the weekend to lift the 25% return rate.",
-    tags: ["Texting", "GOTV"],
-  },
-];
-
 const DAY_MS = 86_400_000;
-const SERIES_DAYS = 14;
+
+// Hard cap on contacts fetched for the chart/KPIs. The PRD's "SQL aggregate at
+// scale" note still stands — at large campaign sizes this should move to a
+// server-side aggregate; for now we cap the raw fetch so we never ship 400k rows.
+const CONTACTS_CAP = 5000;
 
 const nf = new Intl.NumberFormat("en-US");
 
@@ -62,21 +43,19 @@ export default async function HQPage() {
   const campaignId = (await getActiveCampaignId()) ?? "default";
 
   // ── Live aggregates, all RLS-scoped to the active campaign ──────────────────
-  // Window: contacts from the last 14 days (today inclusive) for the chart + KPIs.
-  const since = new Date(Date.now() - (SERIES_DAYS - 1) * DAY_MS);
-  since.setHours(0, 0, 0, 0);
-
   // Run the independent reads in parallel.
   const [contactsRes, supportersRes, vbmRes, turfsRes, canvasserMemRes] = campaign
     ? await Promise.all([
-        // Recent contacts power KPIs (doors today, contact rate) + the 14-day series.
+        // The campaign's contacts power the KPIs and the client-side
+        // range-bucketed chart. Capped at CONTACTS_CAP and ordered newest-first
+        // so a very active campaign keeps its most-recent activity (the chart
+        // buckets by date regardless of row order). See the cap note above.
         supabase
           .from("contacts")
           .select("channel, result, support, canvasser_id, created_at")
           .eq("campaign_id", campaign.id)
-          .gte("created_at", since.toISOString())
-          .order("created_at", { ascending: true })
-          .limit(5000),
+          .order("created_at", { ascending: false })
+          .limit(CONTACTS_CAP),
         // Supporters ID'd = voters scored 4–5 (campaign-wide, the PRD's primary def).
         supabase
           .from("voters")
@@ -110,11 +89,17 @@ export default async function HQPage() {
       ];
 
   const contacts = (contactsRes.data ?? []) as ContactRow[];
+  if (contacts.length >= CONTACTS_CAP) {
+    // We hit the fetch cap — the chart/KPIs reflect the most-recent CONTACTS_CAP
+    // rows. At this scale this should move to a SQL aggregate (see PRD).
+    console.warn(
+      `HQ: contacts fetch hit the ${CONTACTS_CAP}-row cap for campaign ${campaign?.id}; ` +
+        `chart/KPIs are computed over the capped set.`
+    );
+  }
 
   // Today's bucket key (local).
   const todayKey = dayKey(new Date());
-
-  const isSupport = (r: ContactRow) => r.result === "supporter" || (r.support ?? 0) >= 4;
 
   // A contact is "made" only when someone was actually reached. Attempts that
   // didn't reach a person ('not-home') or just dropped literature ('lit-dropped')
@@ -122,7 +107,9 @@ export default async function HQPage() {
   const NO_CONTACT_RESULTS = new Set(["not-home", "lit-dropped"]);
   const isReached = (r: ContactRow) => !NO_CONTACT_RESULTS.has(r.result ?? "");
 
-  // KPI: doors knocked today, contacts made (reached), contact rate (door-reached / door-attempts).
+  // KPI scalars, computed over the full fetched (capped) contact set.
+  // doors today = door attempts dated today; contacts made = total reached;
+  // contact rate = door-reached / door-attempts.
   let doorsToday = 0;
   let doorAttempts = 0;
   let doorsReached = 0;
@@ -140,30 +127,16 @@ export default async function HQPage() {
   const supportersIdd = supportersRes.count ?? 0;
   const vbmReturned = vbmRes.count ?? 0;
 
-  // ── 14-day series (doors / contacts / support) bucketed by day ──────────────
-  const dayKeys: string[] = [];
-  const labels: string[] = [];
-  const idx = new Map<string, number>();
-  for (let i = SERIES_DAYS - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * DAY_MS);
-    const k = dayKey(d);
-    idx.set(k, dayKeys.length);
-    dayKeys.push(k);
-    labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
-  }
-  const doorsSeries = new Array(SERIES_DAYS).fill(0);
-  const contactsSeries = new Array(SERIES_DAYS).fill(0);
-  const supportSeries = new Array(SERIES_DAYS).fill(0);
-  for (const r of contacts) {
-    const i = idx.get(dayKey(new Date(r.created_at)));
-    if (i === undefined) continue;
-    contactsSeries[i]++;
-    if (r.channel === "door") doorsSeries[i]++;
-    if (isSupport(r)) supportSeries[i]++;
-  }
+  // Raw rows handed to the chart — it buckets per selected range client-side.
+  const contactPoints: ContactPoint[] = contacts.map((r) => ({
+    created_at: r.created_at,
+    channel: r.channel,
+    result: r.result,
+    support: r.support,
+  }));
 
   // ── Canvassers in field ─────────────────────────────────────────────────────
-  // door counts (last 14d) per canvasser membership, from the same contact set.
+  // door counts per canvasser membership, from the same contact set.
   const doorsByCanvasser = new Map<string, number>();
   for (const r of contacts) {
     if (r.channel !== "door" || !r.canvasser_id) continue;
@@ -252,10 +225,10 @@ export default async function HQPage() {
           <div className="kpi">
             <div className="label">Doors knocked · today</div>
             <div className="big">{nf.format(doorsToday)}</div>
-            <div className="delta">last 14d: {nf.format(doorAttempts)} door attempts</div>
+            <div className="delta">{nf.format(doorAttempts)} door attempts total</div>
           </div>
           <div className="kpi">
-            <div className="label">Contacts made · 14d</div>
+            <div className="label">Contacts made</div>
             <div className="big">
               {nf.format(contactsMade)}
               <span className="unit">/ {contactRate}% of doors</span>
@@ -275,42 +248,9 @@ export default async function HQPage() {
         </div>
 
         <div className="hq-grid">
-          <KnockVelocity
-            days={labels}
-            doors={doorsSeries}
-            contacts={contactsSeries}
-            support={supportSeries}
-          />
+          <KnockVelocity rows={contactPoints} />
 
-          <div className="card ai">
-            <div className="card-head">
-              <span className="ai-mark">AI</span>
-              <h3>Candi suggests</h3>
-              <span className="sub">· {suggestions.length} actions</span>
-              <span className="tag" style={{ marginLeft: "auto" }}>Preview</span>
-            </div>
-            <div className="card-body flush">
-              {suggestions.map((s) => (
-                <div className="insight" key={s.title}>
-                  <div className="row" style={{ alignItems: "flex-start", gap: 12 }}>
-                    <div className="conf-ring" style={{ ["--c"]: s.c } as React.CSSProperties}>
-                      <span>{Math.round(s.c * 100)}</span>
-                    </div>
-                    <div className="col" style={{ gap: 6, minWidth: 0 }}>
-                      <b style={{ fontSize: 13 }}>{s.title}</b>
-                      <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>{s.body}</span>
-                      <div className="row" style={{ gap: 6, marginTop: 2 }}>
-                        {s.tags.map((t) => (
-                          <span className="tag" key={t}>{t}</span>
-                        ))}
-                        <span className="ai-suggest ghost" style={{ marginLeft: "auto" }}>Dismiss</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CandiSuggests />
 
           <div className="card hq-vbm">
             <div className="card-head">

@@ -661,12 +661,20 @@ svg.ico { display: block; }
 .hq-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
-  grid-auto-rows: min-content;
   gap: 16px;
+  align-items: stretch; /* top-row cards stretch to equal height */
 }
-.hq-trend { grid-column: 1 / 2; }
-.hq-grid .ai { grid-column: 2 / 3; grid-row: 1 / 4; }
-.hq-vbm { grid-column: 1 / 3; }
+/* Top row: chart + suggests side-by-side, equal height. */
+.hq-trend { grid-column: 1 / 2; grid-row: 1; }
+.hq-grid .ai { grid-column: 2 / 3; grid-row: 1; }
+/* Canvassers in field: full-width row below. */
+.hq-vbm { grid-column: 1 / 3; grid-row: 2; }
+/* Cards become flex columns so their bodies fill the stretched height. */
+.hq-trend, .hq-grid .ai {
+  display: flex; flex-direction: column; min-width: 0;
+}
+.hq-trend > .card-body, .hq-grid .ai > .card-body { flex: 1; }
+.hq-grid .ai > .card-body { display: flex; flex-direction: column; }
 .hq-trend-meta {
   display: flex; align-items: baseline; justify-content: space-between;
   font-size: 12px; padding: 0 2px 10px; color: var(--ink-2);
@@ -693,6 +701,36 @@ svg.ico { display: block; }
 }
 .conf-ring span { position: relative; z-index: 1; }
 .ai .insight .conf-ring::before { background: color-mix(in oklch, var(--surface) 80%, var(--tint)); }
+
+/* Candi suggests — Dismiss + View more controls and empty state. */
+.cs-dismiss {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 999px;
+  background: transparent;
+  border: 1px dashed color-mix(in oklch, var(--accent) 50%, var(--border));
+  color: var(--ink-2);
+  font: inherit; font-size: 11.5px; font-weight: 500;
+  cursor: pointer;
+}
+.cs-dismiss:hover { background: var(--surface-2); color: var(--ink); }
+.cs-dismiss:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
+.cs-more {
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent; border: 0; border-top: 1px solid var(--hairline);
+  color: var(--accent-ink);
+  font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  margin-top: auto; /* pin to the bottom of the stretched card */
+}
+.cs-more:hover { background: var(--surface-2); }
+.cs-more:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-2); }
+.cs-empty {
+  padding: 28px 16px; text-align: center; font-size: 12.5px;
+}
+
+/* Range + series toggles for the knock-velocity chart. */
+.hq-trend-ctl { display: inline-flex; gap: 4px; }
 
 .canv-row, .turf-row, .act-row {
   display: flex; align-items: center; gap: 10px;
@@ -1373,9 +1411,10 @@ svg.ico { display: block; }
   .txt-body  > .txt-ctx { display: none; }
   .scr-body  { grid-template-columns: 1fr 320px; }
   .hq-grid   { grid-template-columns: 1fr; }
-  .hq-grid .ai { grid-column: 1; grid-row: auto; }
+  /* Single column: stack in source order (chart → suggests → canvassers). */
+  .hq-grid .ai,
   .hq-grid .hq-vbm,
-  .hq-grid .hq-trend { grid-column: 1; }
+  .hq-grid .hq-trend { grid-column: 1; grid-row: auto; }
 }
 /* Mobile filters drawer (Voters) — hidden on desktop, slide-in on phone/tablet */
 .filters-fab,
@@ -1493,6 +1532,33 @@ svg.ico { display: block; }
 }
 .select-shell { width: 100%; max-width: 880px; }
 .select-head { margin-bottom: 28px; }
+/* Brand on the left, account control pinned to the upper-right. */
+.select-head-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.select-account {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--muted);
+  min-width: 0;
+}
+.select-account-email {
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink-2);
+}
+.select-account-sep { color: var(--mute-2); }
+.select-account-signout {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 0; padding: 4px 6px;
+  margin: -4px -6px; /* keep visual baseline, expand hit area */
+  border-radius: 6px;
+  font: inherit; font-size: 12.5px; font-weight: 500;
+  color: var(--muted); cursor: pointer;
+}
+.select-account-signout:hover { color: var(--ink); background: var(--surface-2); }
+.select-account-signout:focus-visible {
+  outline: none; color: var(--ink); box-shadow: 0 0 0 2px var(--accent-2);
+}
+.select-account-signout svg { width: 14px; height: 14px; }
 .select-title {
   margin: 18px 0 6px;
   font-size: 34px; line-height: 1.05; letter-spacing: -0.01em;
@@ -1506,11 +1572,13 @@ svg.ico { display: block; }
   gap: 14px;
 }
 
+.campaign-card-wrap { position: relative; }
+
 .campaign-card {
   text-align: left;
   display: flex; flex-direction: column; gap: 10px;
   padding: 18px;
-  min-height: 158px;
+  height: 150px; /* uniform across complete, draft, and "new" cards */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1520,6 +1588,7 @@ svg.ico { display: block; }
   color: var(--ink);
   font: inherit;
   width: 100%;
+  overflow: hidden;
 }
 .campaign-card:hover {
   border-color: var(--border-2);
@@ -1539,13 +1608,9 @@ svg.ico { display: block; }
   background: var(--ink); color: var(--accent);
   display: grid; place-items: center;
   font-family: var(--f-mono); font-weight: 700; font-size: 14px;
+  flex: 0 0 38px;
 }
-.campaign-arrow {
-  width: 18px; height: 18px; color: var(--mute-2);
-  transition: transform 0.14s ease, color 0.14s ease;
-}
-.campaign-card:hover .campaign-arrow { color: var(--ink); transform: translateX(2px); }
-.campaign-card-top-right { display: flex; align-items: center; gap: 6px; }
+.campaign-avatar-img { object-fit: cover; }
 .campaign-draft {
   font-size: 9.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
   padding: 2px 7px; border-radius: 999px;
@@ -1576,6 +1641,67 @@ svg.ico { display: block; }
 .campaign-new-icon svg { width: 20px; height: 20px; }
 .campaign-new-label { font-size: 15px; font-weight: 600; }
 
+.campaign-resume {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; color: var(--accent-ink);
+}
+
+/* Kebab delete affordance — upper-left, faint until hover/focus. When a kebab
+   is present, nudge the card's top row right so the avatar clears the kebab. */
+.campaign-card-wrap:has(.campaign-menu) .campaign-card-top { padding-left: 26px; }
+.campaign-menu { position: absolute; top: 12px; left: 10px; z-index: 2; }
+.campaign-menu-btn {
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  border: 0; border-radius: 7px;
+  background: transparent; color: var(--mute-2);
+  cursor: pointer;
+  opacity: 0.2; /* faint by default */
+  transition: opacity 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.campaign-menu-btn svg { width: 16px; height: 16px; }
+/* Raise on hover of the whole card, hover/focus of the button, or while open. */
+.campaign-card-wrap:hover .campaign-menu-btn,
+.campaign-menu-btn:hover,
+.campaign-menu-btn:focus-visible,
+.campaign-menu.open .campaign-menu-btn { opacity: 1; }
+.campaign-menu-btn:hover { background: var(--surface-2); color: var(--ink-2); }
+.campaign-menu-btn:focus-visible {
+  outline: none; opacity: 1; color: var(--ink);
+  box-shadow: 0 0 0 2px var(--accent-2);
+}
+
+.campaign-menu-pop {
+  position: absolute; top: 32px; left: 0; z-index: 30;
+  width: 224px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  padding: 12px;
+  text-align: left;
+  animation: campaign-pop-in 0.12s ease;
+}
+@keyframes campaign-pop-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.campaign-menu-pop-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.campaign-menu-pop-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.campaign-menu-pop-actions {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  margin-top: 12px;
+}
+.campaign-menu-cancel { height: 28px; }
+.campaign-menu-delete {
+  height: 28px;
+  background: var(--rose); color: #fff; border-color: var(--rose);
+  font-weight: 600;
+}
+.campaign-menu-delete:hover { background: oklch(from var(--rose) calc(l - 0.04) c h); }
+.campaign-menu-delete:disabled { opacity: 0.6; cursor: not-allowed; }
+.campaign-menu-delete svg { width: 13px; height: 13px; }
+
 /* ── Auth / login ─────────────────────────────────────────────────────────── */
 .auth-screen {
   min-height: 100vh;
@@ -1604,6 +1730,25 @@ svg.ico { display: block; }
 .auth-field > span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute-2); }
 .auth-card .scr-input { height: 38px; }
 .auth-card .scr-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-2); outline: none; }
+
+/* Password field with the show/hide eye sitting INSIDE the input, on the right. */
+.auth-pw { position: relative; display: block; }
+.auth-pw-input { padding-right: 40px; } /* keep typed text clear of the eye */
+.auth-pw-toggle {
+  position: absolute; top: 0; right: 1px; bottom: 0;
+  width: 38px; min-width: 36px; /* ≥36px hit area */
+  display: grid; place-items: center;
+  background: transparent; border: 0; padding: 0;
+  color: var(--mute-2); cursor: pointer;
+  border-radius: 7px;
+}
+.auth-pw-toggle:hover { color: var(--ink-2); }
+.auth-pw-toggle:focus-visible {
+  outline: none;
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--accent-2);
+}
+.auth-pw-toggle svg { width: 16px; height: 16px; display: block; }
 .auth-error {
   font-size: 12.5px; color: var(--rose);
   background: var(--rose-2); border: 1px solid color-mix(in oklch, var(--rose) 30%, var(--border));
@@ -1709,6 +1854,31 @@ svg.ico { display: block; }
 .onb-select:disabled { opacity: 0.55; cursor: not-allowed; }
 .scr-input { height: 36px; }
 .onb-textarea.scr-textarea { min-height: 72px; }
+
+/* Candidate photo: fixed rounded thumbnail + cover so any aspect ratio never
+   squishes. Preview box and its <img> share the same fixed dimensions. */
+.onb-photo { display: flex; align-items: flex-start; gap: 14px; }
+.onb-photo-preview {
+  width: 80px; height: 80px; flex: 0 0 80px;
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+}
+.onb-photo-preview img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+}
+.onb-photo-placeholder { width: 22px; height: 22px; color: var(--mute-2); }
+.onb-photo-actions {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  min-width: 0; flex: 1;
+}
+.onb-photo-input { display: none; }
+.onb-photo-btn { height: 34px; }
+.onb-photo-remove { height: 34px; }
+.onb-photo-hint { font-size: 11.5px; line-height: 1.4; margin: 2px 0 0; }
 
 .onb-seed-note, .onb-review-seed {
   display: flex; align-items: center; gap: 8px;

@@ -3,13 +3,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
   MapPin,
   CalendarDays,
-  MoreHorizontal,
+  MoreVertical,
   Trash2,
   PencilLine,
-  X,
   Loader2,
 } from "lucide-react";
 import { selectCampaign, deleteCampaign } from "@/app/select/actions";
@@ -47,21 +45,21 @@ export function CampaignCard({
   // A campaign with no office AND no district is an incomplete draft.
   const isDraft = !c.office && !c.district;
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
+  // The kebab popover doubles as the delete confirm — a single light step
+  // (no type-to-confirm), with Cancel / Delete (Delete destructive-styled).
+  const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const dialogTitleId = useId();
+  const popId = useId();
 
-  // Close the ⋯ menu on outside click / Escape.
+  // Close the popover on outside click / Escape.
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!open) return;
     function onDown(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape" && !deleting) setOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -69,23 +67,7 @@ export function CampaignCard({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
-
-  // Escape closes the confirm dialog too.
-  useEffect(() => {
-    if (!confirmOpen) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !deleting) setConfirmOpen(false);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [confirmOpen, deleting]);
-
-  function openConfirm() {
-    setMenuOpen(false);
-    setConfirmText("");
-    setConfirmOpen(true);
-  }
+  }, [open, deleting]);
 
   async function onDelete() {
     if (deleting) return;
@@ -93,7 +75,7 @@ export function CampaignCard({
     try {
       await deleteCampaign(c.id);
       // Server revalidates /select; the card disappears on the refreshed list.
-      setConfirmOpen(false);
+      setOpen(false);
     } finally {
       setDeleting(false);
     }
@@ -125,10 +107,7 @@ export function CampaignCard({
         >
           <div className="campaign-card-top">
             {avatar}
-            <span className="campaign-card-top-right">
-              <span className="campaign-draft">Draft</span>
-              <ArrowRight className="campaign-arrow" />
-            </span>
+            <span className="campaign-draft">Draft</span>
           </div>
           <div className="campaign-name">{c.candidate}</div>
           <div className="campaign-meta">
@@ -149,16 +128,15 @@ export function CampaignCard({
           <button type="submit" className="campaign-card" aria-label={`Open ${c.candidate}`}>
             <div className="campaign-card-top">
               {avatar}
-              <span className="campaign-card-top-right">
-                <ArrowRight className="campaign-arrow" />
-              </span>
             </div>
             <div className="campaign-name">{c.candidate}</div>
             <div className="campaign-meta">
-              <span className="campaign-meta-row">
-                <MapPin className="campaign-ico" />
-                {meta}
-              </span>
+              {meta ? (
+                <span className="campaign-meta-row">
+                  <MapPin className="campaign-ico" />
+                  {meta}
+                </span>
+              ) : null}
               {date ? (
                 <span className="campaign-meta-row">
                   <CalendarDays className="campaign-ico" />
@@ -170,96 +148,62 @@ export function CampaignCard({
         </form>
       )}
 
-      {/* Delete affordance — owner/director only. Sits above the card link. */}
+      {/* Delete affordance — owner/director only. Vertical kebab in the UPPER-LEFT,
+          faint until hover/focus. Sits above the card; all pointer events are
+          stopped so the card's select/resume action never fires. */}
       {canManage && (
-        <div className="campaign-menu" ref={menuRef}>
+        <div
+          className={"campaign-menu" + (open ? " open" : "")}
+          ref={menuRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             className="campaign-menu-btn"
             aria-label={`More actions for ${c.candidate}`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            aria-controls={open ? popId : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen((v) => !v);
+            }}
           >
-            <MoreHorizontal aria-hidden />
+            <MoreVertical aria-hidden />
           </button>
-          {menuOpen && (
-            <div className="campaign-menu-pop" role="menu">
-              <button
-                type="button"
-                className="campaign-menu-item danger"
-                role="menuitem"
-                onClick={openConfirm}
-              >
-                <Trash2 aria-hidden />
-                Delete campaign
-              </button>
+          {open && (
+            <div className="campaign-menu-pop" id={popId} role="dialog" aria-label="Delete campaign">
+              <div className="campaign-menu-pop-title">Delete campaign</div>
+              <div className="campaign-menu-pop-sub">removes its voters &amp; turfs</div>
+              <div className="campaign-menu-pop-actions">
+                <button
+                  type="button"
+                  className="btn campaign-menu-cancel"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!deleting) setOpen(false);
+                  }}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn campaign-menu-delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void onDelete();
+                  }}
+                  disabled={deleting}
+                >
+                  {deleting ? <Loader2 className="onb-spin" /> : <Trash2 aria-hidden />}
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Type-to-confirm delete dialog. */}
-      {confirmOpen && (
-        <div
-          className="campaign-confirm-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={dialogTitleId}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !deleting) setConfirmOpen(false);
-          }}
-        >
-          <div className="campaign-confirm">
-            <div className="campaign-confirm-head">
-              <h2 id={dialogTitleId} className="campaign-confirm-title">
-                Delete this campaign?
-              </h2>
-              <button
-                type="button"
-                className="campaign-confirm-x"
-                aria-label="Cancel"
-                onClick={() => !deleting && setConfirmOpen(false)}
-              >
-                <X aria-hidden />
-              </button>
-            </div>
-            <p className="campaign-confirm-body">
-              This permanently deletes <b>{c.candidate}</b> and removes all of its voters,
-              turfs, and contacts. This <b>cannot be undone</b>.
-            </p>
-            <label className="campaign-confirm-label">
-              Type <span className="campaign-confirm-name">{c.candidate}</span> to confirm
-              <input
-                className="scr-input"
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
-                placeholder={c.candidate}
-                autoFocus
-                autoComplete="off"
-                disabled={deleting}
-              />
-            </label>
-            <div className="campaign-confirm-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setConfirmOpen(false)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn campaign-confirm-delete"
-                onClick={onDelete}
-                disabled={deleting || confirmText.trim() !== c.candidate.trim()}
-              >
-                {deleting ? <Loader2 className="onb-spin" /> : <Trash2 aria-hidden />}
-                {deleting ? "Deleting…" : "Delete permanently"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

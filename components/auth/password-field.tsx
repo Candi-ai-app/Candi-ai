@@ -7,6 +7,10 @@ import { Eye, EyeOff } from "lucide-react";
  * Password input with an inline show/hide toggle. Used inside the login form
  * (a server component), so the interactive bit lives here as a client island.
  * The input keeps name="password" so it posts to signIn/signUp unchanged.
+ *
+ * The toggle is positioned *inside* the input on the right: the wrapper is
+ * relative, the button is absolutely positioned, and the input gets right
+ * padding so typed text never slides under the icon.
  */
 export function PasswordField() {
   const [show, setShow] = useState(false);
@@ -30,7 +34,11 @@ export function PasswordField() {
         aria-pressed={show}
         tabIndex={0}
       >
-        {show ? <EyeOff /> : <Eye />}
+        {show ? (
+          <EyeOff width={16} height={16} aria-hidden />
+        ) : (
+          <Eye width={16} height={16} aria-hidden />
+        )}
       </button>
     </div>
   );
