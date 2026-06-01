@@ -25,7 +25,7 @@ export function rateLimited(userId: string, max = 20, windowMs = 60_000): boolea
 }
 
 type Usage =
-  | { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number }
+  | { input_tokens?: number | null; output_tokens?: number | null; cache_read_input_tokens?: number | null }
   | null
   | undefined;
 
