@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { requireUser, rateLimited, logUsage } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
     );
   }
 
+  const userId = await requireUser();
+  if (!userId) return Response.json({ error: "Sign in to use auto-fill." }, { status: 401 });
+  if (rateLimited(userId)) return Response.json({ error: "Slow down a moment, then try again." }, { status: 429 });
+
   let description = "";
   try {
     const body = await req.json();
@@ -72,6 +77,7 @@ export async function POST(req: Request) {
       tool_choice: { type: "tool", name: "set_campaign" },
       messages: [{ role: "user", content: description }],
     });
+    logUsage("onboarding", userId, "claude-sonnet-4-6", msg.usage);
 
     const toolUse = msg.content.find((b) => b.type === "tool_use");
     const input = (toolUse && "input" in toolUse ? toolUse.input : {}) as Filled;

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { requireUser, rateLimited, logUsage } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,10 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
+
+  const userId = await requireUser();
+  if (!userId) return new Response("Sign in to draft messages.", { status: 401 });
+  if (rateLimited(userId)) return new Response("Slow down a moment, then try again.", { status: 429 });
 
   let v: VoterCtx = {};
   try {
@@ -71,6 +76,7 @@ Output only the message body.`;
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     });
+    logUsage("draft", userId, "claude-sonnet-4-6", msg.usage);
     const text = msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)

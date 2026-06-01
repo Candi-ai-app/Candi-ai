@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { requireUser, rateLimited, logUsage } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,11 @@ export async function POST(req: Request) {
   if (!key) {
     return new Response("Ask Candi isn't configured yet — ANTHROPIC_API_KEY is missing on the server.", { status: 503 });
   }
+
+  // Require a signed-in user — these endpoints call the paid Anthropic API.
+  const userId = await requireUser();
+  if (!userId) return new Response("Sign in to use Ask Candi.", { status: 401 });
+  if (rateLimited(userId)) return new Response("You're sending messages too fast — give it a moment.", { status: 429 });
 
   let messages: Msg[] = [];
   try {
@@ -55,6 +61,8 @@ export async function POST(req: Request) {
             controller.enqueue(encoder.encode(event.delta.text));
           }
         }
+        const final = await ms.finalMessage();
+        logUsage("chat", userId, "claude-sonnet-4-6", final.usage);
       } catch {
         controller.enqueue(encoder.encode("\n\nSorry — I hit an error reaching Candi. Please try again."));
       } finally {
