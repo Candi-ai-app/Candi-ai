@@ -21,9 +21,9 @@ export function PasswordField() {
         className="scr-input auth-pw-input"
         name="password"
         type={show ? "text" : "password"}
-        placeholder="6+ characters"
+        placeholder="10+ characters"
         required
-        minLength={6}
+        minLength={10}
         autoComplete="current-password"
       />
       <button

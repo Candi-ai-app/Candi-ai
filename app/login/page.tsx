@@ -43,7 +43,7 @@ export default async function LoginPage({
         <button className="btn auth-secondary" formAction={signUp}>Create an account</button>
 
         <p className="auth-hint muted">
-          Demo · any email + a 6-character password creates a director account on the Reyes campaign.
+          Demo · any email + a 10-character password creates a demo director account (sample campaigns only).
         </p>
       </form>
     </div>

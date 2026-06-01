@@ -19,6 +19,13 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
+  // Server-side password policy (the client minLength is advisory and bypassable).
+  if (password.length < 10) {
+    redirect(
+      `/login?error=${encodeURIComponent("Password must be at least 10 characters.")}`,
+    );
+  }
+
   // Create a pre-confirmed user via the admin API (skips email confirmation for the demo).
   const admin = createAdminClient();
   const { error: createErr } = await admin.auth.admin.createUser({
