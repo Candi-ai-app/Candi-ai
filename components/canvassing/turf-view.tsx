@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers, Sparkles, Plus, Search, SlidersHorizontal, X, MapPinned } from "lucide-react";
+import { Layers, Sparkles, Plus, Search, SlidersHorizontal, X, MapPinned, Users, DoorOpen, Route, FileText, Activity } from "lucide-react";
 import type { VoterPoint, TurfListItem, TurfStats } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
 
@@ -62,7 +62,14 @@ export function TurfView({
         </div>
         <div className="acts">
           <button className="btn" type="button"><Layers className="ico" /> Layers</button>
-          <button className="btn" type="button"><Sparkles className="ico" /> AI cut turfs</button>
+          <button
+            className="btn"
+            type="button"
+            disabled
+            title="Soon — Candi will auto-cut balanced turfs from your filtered voters"
+          >
+            <Sparkles className="ico" /> AI cut turfs <span className="turf-soon">Soon</span>
+          </button>
           <button className="btn primary" type="button"><Plus className="ico" /> New turf</button>
         </div>
       </div>
@@ -85,10 +92,10 @@ export function TurfView({
 
           {turfs.length === 0 ? (
             <div className="turf-empty">
-              <MapPinned style={{ width: 26, height: 26, color: "var(--muted)" }} />
+              <span className="turf-empty-ico"><MapPinned style={{ width: 20, height: 20 }} /></span>
               <b>No turfs yet</b>
               <span className="muted">
-                Draw a turf on the map — filter the voters you want, then use the polygon tool to cut and save it.
+                Filter the voters you want on the map, then use the polygon tool to cut and save your first turf.
               </span>
             </div>
           ) : (
@@ -98,7 +105,7 @@ export function TurfView({
               return (
                 <div className="turf-section" key={g.key}>
                   <div className="turf-section-h">
-                    <span className={g.dot} /> {g.label} <span className="muted mono">{rows.length}</span>
+                    <span className={g.dot} /> {g.label} <span className="turf-section-n mono">{rows.length}</span>
                   </div>
                   {rows.map((t) => (
                     <TurfRow key={t.id} t={t} active={t.id === selId} onSelect={() => setSelId(t.id)} />
@@ -128,17 +135,17 @@ function StatusBadge({ status, complete = "done" }: { status: string; complete?:
 function TurfRow({ t, active, onSelect }: { t: TurfListItem; active: boolean; onSelect: () => void }) {
   return (
     <button className={"turf-card" + (active ? " active" : "")} type="button" onClick={onSelect}>
-      <div className="row" style={{ gap: 6 }}>
+      <div className="turf-card-top">
+        <span className="turf-card-name">{t.name}</span>
         <StatusBadge status={t.status} />
-        {t.hasBoundary && <span className="tag mono">map</span>}
       </div>
-      <div style={{ fontWeight: 500, fontSize: 13, marginTop: 4 }}>{t.name}</div>
-      <div className="row muted" style={{ fontSize: 11.5, marginTop: 2, gap: 6 }}>
-        <span className="mono">{t.doorCount.toLocaleString()}</span> doors ·{" "}
-        <span className="mono">{t.voterCount.toLocaleString()}</span> voters
+      <div className="turf-card-meta">
+        <span className="turf-card-stat"><DoorOpen className="turf-mi" /> <span className="mono">{t.doorCount.toLocaleString()}</span> doors</span>
+        <span className="turf-card-stat"><Users className="turf-mi" /> <span className="mono">{t.voterCount.toLocaleString()}</span> voters</span>
       </div>
-      <div className="row muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-        {t.assignee ?? "Unassigned"}
+      <div className="turf-card-foot">
+        <span className="turf-card-assignee">{t.assignee ?? "Unassigned"}</span>
+        {t.hasBoundary && <span className="tag mono turf-card-maptag"><MapPinned className="turf-mi" /> map</span>}
       </div>
     </button>
   );
@@ -158,61 +165,73 @@ function TurfDetail({ t, onClose }: { t: TurfListItem; onClose: () => void }) {
         <X className="x" style={{ width: 16, height: 16 }} onClick={onClose} />
       </div>
       <div className="drawer-body">
-        <div className="kpi-mini-row">
-          <div className="kpi-mini">
-            <div className="serif" style={{ fontSize: 24 }}>{t.doorCount.toLocaleString()}</div>
-            <div className="muted" style={{ fontSize: 11 }}>Doors</div>
+        <div className="turf-tiles">
+          <div className="turf-tile">
+            <DoorOpen className="turf-tile-ico" />
+            <div className="serif turf-tile-n">{t.doorCount.toLocaleString()}</div>
+            <div className="turf-tile-l">Doors</div>
           </div>
-          <div className="kpi-mini">
-            <div className="serif" style={{ fontSize: 24 }}>{t.voterCount.toLocaleString()}</div>
-            <div className="muted" style={{ fontSize: 11 }}>Voters</div>
+          <div className="turf-tile">
+            <Users className="turf-tile-ico" />
+            <div className="serif turf-tile-n">{t.voterCount.toLocaleString()}</div>
+            <div className="turf-tile-l">Voters</div>
           </div>
-          <div className="kpi-mini">
-            <div className="serif" style={{ fontSize: 24, textTransform: "capitalize" }}>{t.status}</div>
-            <div className="muted" style={{ fontSize: 11 }}>Status</div>
-          </div>
-        </div>
-
-        <div className="field-row">
-          <div className="lbl">Assignee</div>
-          <div className="val row" style={{ gap: 6 }}>
-            {t.assignee ? (
-              <>
-                <div className="avatar" style={{ width: 22, height: 22, fontSize: 10 }}>
-                  {initialsOf(t.assignee)}
-                </div>
-                <span>{t.assignee}</span>
-              </>
-            ) : (
-              <span className="muted">Unassigned</span>
-            )}
-            <button className="ai-suggest ghost" style={{ marginLeft: "auto" }} type="button">Reassign</button>
+          <div className="turf-tile">
+            <span className="turf-tile-pill"><StatusBadge status={t.status} complete="complete" /></span>
+            <div className="turf-tile-l">Status</div>
           </div>
         </div>
 
-        <div className="field-row">
-          <div className="lbl">Boundary</div>
-          <div className="val">
-            {t.hasBoundary ? "Drawn on map" : <span className="muted">Not drawn yet</span>}
+        <div className="turf-detail-section">
+          <div className="turf-detail-h">Assignment</div>
+          <div className="field-row">
+            <div className="lbl">Assignee</div>
+            <div className="val row" style={{ gap: 6 }}>
+              {t.assignee ? (
+                <>
+                  <div className="avatar" style={{ width: 22, height: 22, fontSize: 10 }}>
+                    {initialsOf(t.assignee)}
+                  </div>
+                  <span>{t.assignee}</span>
+                </>
+              ) : (
+                <span className="muted">Unassigned</span>
+              )}
+              <button className="ai-suggest ghost" style={{ marginLeft: "auto" }} type="button">Reassign</button>
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="lbl">Boundary</div>
+            <div className="val">
+              {t.hasBoundary
+                ? <span className="row" style={{ gap: 5 }}><MapPinned style={{ width: 13, height: 13, color: "var(--muted)" }} /> Drawn on map</span>
+                : <span className="muted">Not drawn yet</span>}
+            </div>
           </div>
         </div>
 
-        {/* Fields we don't yet store per-turf — labelled, not fabricated. */}
-        <div className="field-row">
-          <div className="lbl">Optimized route</div>
-          <div className="val muted">Not yet available</div>
-        </div>
-        <div className="field-row">
-          <div className="lbl">Script</div>
-          <div className="val muted">Not yet assigned</div>
+        {/* Fields we don't yet store per-turf — clearly labelled "not yet available",
+            never fabricated. Shown as muted rows so the drawer doesn't read half-empty. */}
+        <div className="turf-detail-section">
+          <div className="turf-detail-h">Planning</div>
+          <div className="turf-soon-row">
+            <Route className="turf-soon-ico" />
+            <span className="turf-soon-label">Optimized route</span>
+            <span className="turf-soon-tag">Not yet available</span>
+          </div>
+          <div className="turf-soon-row">
+            <FileText className="turf-soon-ico" />
+            <span className="turf-soon-label">Canvassing script</span>
+            <span className="turf-soon-tag">Not yet assigned</span>
+          </div>
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <div className="muted" style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8 }}>
-            Doors · today
-          </div>
-          <div className="muted" style={{ fontSize: 12.5, padding: "4px 0" }}>
-            Per-door activity isn&apos;t tracked for this turf yet.
+        <div className="turf-detail-section">
+          <div className="turf-detail-h">Doors · today</div>
+          <div className="turf-soon-row">
+            <Activity className="turf-soon-ico" />
+            <span className="turf-soon-label">Per-door activity</span>
+            <span className="turf-soon-tag">Not tracked yet</span>
           </div>
         </div>
       </div>

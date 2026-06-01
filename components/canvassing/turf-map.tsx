@@ -251,26 +251,21 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
       {/* ── Filter bar — the filtered list drives the turf ──────────────────── */}
-      <div
-        style={{
-          position: "absolute", top: 14, left: 52, zIndex: 3, display: "flex", flexDirection: "column", gap: 8,
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 10,
-          boxShadow: "var(--shadow-card)", width: 226, fontSize: 12,
-        }}
-      >
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <span style={{ fontWeight: 600 }}>Filter doors</span>
-          <span className="mono muted" style={{ fontSize: 11 }}>{filtered.length}/{voterPoints.length}</span>
+      <div className="map-overlay map-filter">
+        <div className="map-filter-head">
+          <span className="map-overlay-title">Filter doors</span>
+          <span className="map-filter-count mono">{filtered.length}/{voterPoints.length}</span>
         </div>
 
-        <div className="row" style={{ gap: 4 }}>
+        <div className="map-party-row">
           {(["D", "R", "I"] as Party[]).map((k) => (
             <button
               key={k}
               type="button"
+              className="map-party-btn"
+              aria-pressed={party[k]}
               onClick={() => togglePartyKey(k)}
               style={{
-                flex: 1, height: 26, borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontWeight: 600,
                 border: `1px solid ${party[k] ? PARTY_COLOR[k] : "var(--border)"}`,
                 background: party[k] ? PARTY_COLOR[k] : "transparent",
                 color: party[k] ? "#fff" : "var(--ink-2)",
@@ -281,23 +276,23 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
           ))}
         </div>
 
-        <label className="row" style={{ gap: 6, cursor: "pointer" }}>
+        <label className="map-filter-check">
           <input type="checkbox" checked={svOn} onChange={(e) => setSvOn(e.target.checked)} />
           <span>Super voters only</span>
         </label>
-        <div className="row" style={{ gap: 6, opacity: svOn ? 1 : 0.45, pointerEvents: svOn ? "auto" : "none" }}>
+        <div className="map-filter-sv" style={{ opacity: svOn ? 1 : 0.45, pointerEvents: svOn ? "auto" : "none" }}>
           <span className="muted">≥</span>
           <Stepper value={svN} min={1} max={svM} onChange={setN} />
           <span className="muted">of last</span>
           <Stepper value={svM} min={2} max={MAX_M} onChange={setM} />
         </div>
 
-        <label className="row" style={{ gap: 6, justifyContent: "space-between" }}>
+        <label className="map-filter-support">
           <span>Support ≥</span>
           <select
+            className="map-select"
             value={supportMin}
             onChange={(e) => setSupportMin(Number(e.target.value))}
-            style={{ height: 24, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)", fontSize: 11.5, padding: "0 4px" }}
           >
             <option value={0}>Any</option>
             {[1, 2, 3, 4, 5].map((v) => (
@@ -307,18 +302,15 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
         </label>
       </div>
 
-      {/* ── Style switcher (unchanged) ──────────────────────────────────────── */}
-      <div style={{ position: "absolute", top: 14, right: 14, zIndex: 2, display: "flex", gap: 2, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 2, boxShadow: "var(--shadow-card)" }}>
+      {/* ── Style switcher ──────────────────────────────────────────────────── */}
+      <div className="map-switcher">
         {STYLES.map((s) => (
           <button
             key={s.url}
             type="button"
+            className={"map-switcher-btn" + (styleUrl === s.url ? " active" : "")}
+            aria-pressed={styleUrl === s.url}
             onClick={() => switchStyle(s.url)}
-            style={{
-              height: 26, padding: "0 9px", border: 0, borderRadius: 6, fontSize: 11.5, fontWeight: 500, cursor: "pointer",
-              background: styleUrl === s.url ? "var(--ink)" : "transparent",
-              color: styleUrl === s.url ? "var(--bg)" : "var(--ink-2)",
-            }}
           >
             {s.label}
           </button>
@@ -329,23 +321,20 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
       <div className="map-legend">
         {counts ? (
           <>
-            <div className="row" style={{ gap: 6, alignItems: "baseline" }}>
-              <span className="serif" style={{ fontSize: 22, fontWeight: 600 }}>
+            <div className="map-legend-count">
+              <span className="serif map-legend-n">
                 {(countMode === "people" ? counts.people : counts.doors).toLocaleString()}
               </span>
-              <span className="muted" style={{ fontSize: 11.5 }}>{countMode === "people" ? "people" : "doors"} in turf</span>
+              <span className="muted map-legend-unit">{countMode === "people" ? "people" : "doors"} in turf</span>
             </div>
-            <div className="row" style={{ gap: 2, marginTop: 4, background: "var(--surface-3)", borderRadius: 6, padding: 2, width: "fit-content" }}>
+            <div className="map-seg">
               {(["doors", "people"] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
+                  className={"map-seg-btn" + (countMode === m ? " active" : "")}
+                  aria-pressed={countMode === m}
                   onClick={() => setCountMode(m)}
-                  style={{
-                    height: 22, padding: "0 8px", border: 0, borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                    background: countMode === m ? "var(--ink)" : "transparent",
-                    color: countMode === m ? "var(--bg)" : "var(--ink-2)",
-                  }}
                 >
                   {m === "doors" ? `${counts.doors} doors` : `${counts.people} people`}
                 </button>
@@ -353,12 +342,12 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
             </div>
           </>
         ) : (
-          <div className="row" style={{ gap: 6, fontWeight: 500 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, border: "2px solid var(--accent)", background: "color-mix(in oklch, var(--accent) 25%, transparent)" }} />
+          <div className="map-legend-hint">
+            <span className="map-legend-swatch" />
             Cut a turf — polygon tool, top-left
           </div>
         )}
-        <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+        <div className="map-legend-foot muted">
           {saving ? "Saving…" : `${saved.length} turf${saved.length === 1 ? "" : "s"} saved · ${filtered.length} doors shown`}
         </div>
       </div>
@@ -368,12 +357,10 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
 
 function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
   return (
-    <span className="row" style={{ gap: 0, border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
-      <button type="button" aria-label="decrease" disabled={value <= min} onClick={() => onChange(value - 1)}
-        style={{ width: 22, height: 24, border: 0, background: "transparent", cursor: value <= min ? "default" : "pointer", color: "var(--ink-2)", fontWeight: 700, opacity: value <= min ? 0.4 : 1 }}>−</button>
-      <span className="mono" style={{ minWidth: 18, textAlign: "center", fontWeight: 600 }}>{value}</span>
-      <button type="button" aria-label="increase" disabled={value >= max} onClick={() => onChange(value + 1)}
-        style={{ width: 22, height: 24, border: 0, background: "transparent", cursor: value >= max ? "default" : "pointer", color: "var(--ink-2)", fontWeight: 700, opacity: value >= max ? 0.4 : 1 }}>+</button>
+    <span className="map-stepper">
+      <button type="button" aria-label="decrease" disabled={value <= min} onClick={() => onChange(value - 1)}>−</button>
+      <span className="mono map-stepper-val">{value}</span>
+      <button type="button" aria-label="increase" disabled={value >= max} onClick={() => onChange(value + 1)}>+</button>
     </span>
   );
 }

@@ -1285,28 +1285,61 @@ svg.ico { display: block; }
   overflow-y: auto;
   display: flex; flex-direction: column;
 }
-.turf-section { padding: 6px 10px 10px; }
+.turf-section { padding: 4px 10px 8px; }
 .turf-section-h {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 6px 4px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 6px 5px;
   font-size: 10.5px; font-weight: 600;
   letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--muted);
 }
+/* Per-group count chip, pinned right so groups align regardless of label width. */
+.turf-section-n {
+  margin-left: auto;
+  font-size: 10.5px; color: var(--mute-2);
+  background: var(--surface-3); border-radius: 999px;
+  padding: 1px 7px; line-height: 1.5;
+}
+
+/* Turf-list card — consistent rhythm; color-only hover/selected (no transform → no shift). */
 .turf-card {
-  display: block; width: 100%; text-align: left;
+  display: flex; flex-direction: column; gap: 7px;
+  width: 100%; text-align: left;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 11px 12px;
   margin-bottom: 6px;
   cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
-.turf-card:hover { border-color: var(--border-2); }
+.turf-card:hover { border-color: var(--border-2); background: var(--surface); box-shadow: var(--shadow-card); }
 .turf-card.active {
   border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink);
+  box-shadow: inset 2px 0 0 var(--accent), 0 0 0 1px var(--ink);
 }
+.turf-card:focus-visible { outline: none; border-color: var(--ink); box-shadow: 0 0 0 2px var(--accent-2); }
+.turf-card-top { display: flex; align-items: center; gap: 8px; }
+.turf-card-name {
+  flex: 1; min-width: 0;
+  font-weight: 600; font-size: 13px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.turf-card-meta { display: flex; align-items: center; gap: 12px; }
+.turf-card-stat {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; color: var(--muted);
+}
+.turf-card-foot { display: flex; align-items: center; gap: 8px; }
+.turf-card-assignee {
+  flex: 1; min-width: 0;
+  font-size: 11.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.turf-card-maptag { gap: 3px; height: 17px; font-size: 10.5px; color: var(--mute-2); }
+/* Shared mini-icon for list rows + tiles. */
+.turf-mi { width: 12px; height: 12px; flex: 0 0 12px; color: var(--mute-2); }
+
 /* Turf-list: live filter input + empty state (real-data wiring) */
 .turf-filter-input {
   border: 0; background: transparent; outline: none;
@@ -1315,11 +1348,73 @@ svg.ico { display: block; }
 }
 .turf-filter-input::placeholder { color: var(--muted); }
 .turf-empty {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  padding: 24px 16px; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 40px 24px; color: var(--muted); text-align: center;
+}
+.turf-empty-ico {
+  display: grid; place-items: center;
+  width: 38px; height: 38px; margin-bottom: 2px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 16%, var(--surface));
+  color: var(--accent-ink);
 }
 .turf-empty b { color: var(--ink); font-size: 13px; }
-.turf-empty span { font-size: 12px; line-height: 1.5; }
+.turf-empty span { font-size: 12px; line-height: 1.5; max-width: 240px; }
+
+/* "Soon" pill on the not-yet-wired AI-cut-turfs action (matches .vot-soon). */
+.turf-soon {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 1px 4px; border-radius: 4px;
+  background: var(--surface-3); color: var(--muted);
+}
+
+/* ── Turf detail drawer ─────────────────────────────────────────────────────── */
+.turf-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.turf-tile {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 11px 12px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+  min-height: 74px;
+}
+.turf-tile-ico { position: absolute; top: 10px; right: 10px; width: 14px; height: 14px; color: var(--mute-2); }
+.turf-tile-n { font-size: 24px; line-height: 1.05; color: var(--ink); letter-spacing: -0.01em; }
+.turf-tile-pill { display: flex; align-items: center; min-height: 26px; }
+.turf-tile-l {
+  margin-top: auto;
+  font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); font-weight: 500;
+}
+
+/* Grouped sections inside the drawer — header rhythm matches the voters detail card. */
+.turf-detail-section { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--hairline); }
+.turf-detail-section:first-of-type { padding-top: 16px; }
+.turf-detail-h {
+  margin: 0 0 4px;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--mute-2);
+}
+
+/* Honest "not yet available" interim rows — clearly labelled, never a blank gap. */
+.turf-soon-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 0;
+}
+.turf-soon-row + .turf-soon-row { border-top: 1px solid var(--hairline); }
+.turf-soon-ico { width: 15px; height: 15px; flex: 0 0 15px; color: var(--mute-2); }
+.turf-soon-label { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink-2); }
+.turf-soon-tag {
+  font-size: 10.5px; font-weight: 500;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
 
 .map-wrap {
   position: relative;
@@ -1348,15 +1443,41 @@ svg.ico { display: block; }
 .map-divider { height: 1px; background: var(--border); }
 
 .map-legend {
-  position: absolute; left: 14px; bottom: 14px;
+  position: absolute; left: 14px; bottom: 14px; z-index: 2;
   display: flex; flex-direction: column; gap: 6px;
-  background: var(--surface);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 12px;
+  min-width: 168px;
   font-size: 11.5px; color: var(--ink-2);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-pop);
 }
+.map-legend-count { display: flex; align-items: baseline; gap: 6px; }
+.map-legend-n { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.map-legend-unit { font-size: 11.5px; }
+.map-legend-hint { display: flex; align-items: center; gap: 7px; font-weight: 500; color: var(--ink-2); }
+.map-legend-swatch {
+  width: 11px; height: 11px; flex: 0 0 11px; border-radius: 3px;
+  border: 2px solid var(--accent);
+  background: color-mix(in oklch, var(--accent) 25%, transparent);
+}
+.map-legend-foot { font-size: 11.5px; margin-top: 1px; }
+/* Doors-vs-people segmented toggle. */
+.map-seg {
+  display: inline-flex; gap: 2px; width: fit-content; margin-top: 2px;
+  background: var(--surface-3); border-radius: 7px; padding: 2px;
+}
+.map-seg-btn {
+  height: 22px; padding: 0 9px; border: 0; border-radius: 5px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  background: transparent; color: var(--ink-2);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.map-seg-btn:hover:not(.active) { color: var(--ink); }
+.map-seg-btn.active { background: var(--ink); color: var(--bg); }
+.map-seg-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
 
 .map-search {
   position: absolute; right: 14px; top: 14px;
@@ -1375,6 +1496,77 @@ svg.ico { display: block; }
   font-size: 12.5px; color: var(--ink);
 }
 .map-search input::placeholder { color: var(--muted); }
+
+/* ── Shared map-overlay chrome (filter bar etc.) — readable over any basemap ── */
+.map-overlay {
+  position: absolute; z-index: 3;
+  display: flex; flex-direction: column; gap: 8px;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+}
+.map-overlay-title { font-weight: 600; color: var(--ink); }
+/* Filter-doors bar — sits clear of the top-left zoom/draw controls. */
+.map-filter { top: 14px; left: 52px; width: 226px; }
+.map-filter-head { display: flex; align-items: center; justify-content: space-between; }
+.map-filter-count { font-size: 11px; color: var(--muted); }
+.map-party-row { display: flex; gap: 4px; }
+.map-party-btn {
+  flex: 1; height: 27px; border-radius: 7px; cursor: pointer;
+  font-size: 11.5px; font-weight: 600;
+  transition: filter 0.12s ease;
+}
+.map-party-btn:hover { filter: brightness(0.97); }
+.map-party-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
+.map-filter-check { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink-2); }
+.map-filter-check input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--ink); cursor: pointer; }
+.map-filter-sv { display: flex; align-items: center; gap: 6px; transition: opacity 0.12s ease; }
+.map-filter-support { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-2); }
+.map-select {
+  height: 26px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--ink); font-size: 11.5px; padding: 0 6px;
+  cursor: pointer;
+}
+.map-select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-2); }
+
+/* Super-voter steppers (N-of-M). */
+.map-stepper {
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  background: var(--surface);
+}
+.map-stepper button {
+  width: 22px; height: 24px; border: 0; background: transparent;
+  color: var(--ink-2); font-weight: 700; cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.map-stepper button:hover:not(:disabled) { background: var(--surface-3); color: var(--ink); }
+.map-stepper button:disabled { opacity: 0.4; cursor: default; }
+.map-stepper button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-2); }
+.map-stepper-val { min-width: 18px; text-align: center; font-weight: 600; }
+
+/* Style switcher (top-right). */
+.map-switcher {
+  position: absolute; top: 14px; right: 14px; z-index: 2;
+  display: flex; gap: 2px;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid var(--border); border-radius: 9px; padding: 2px;
+  box-shadow: var(--shadow-pop);
+}
+.map-switcher-btn {
+  height: 26px; padding: 0 10px; border: 0; border-radius: 7px;
+  font-size: 11.5px; font-weight: 500; cursor: pointer;
+  background: transparent; color: var(--ink-2);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.map-switcher-btn:hover:not(.active) { background: var(--surface-3); color: var(--ink); }
+.map-switcher-btn.active { background: var(--ink); color: var(--bg); }
+.map-switcher-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-2); }
 
 .kpi-mini-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .kpi-mini {
@@ -1735,8 +1927,18 @@ svg.ico { display: block; }
     z-index: 58;
     animation: vd-sheet-in 0.2s ease-out;
   }
+  /* Turf list + map stay two-column; the detail surfaces as a bottom sheet over
+     the map (mirrors the Voters pattern) so selecting a turf works on tablet/phone. */
   .turf-body, .turf-body.detail-open { grid-template-columns: 250px 1fr; }
-  .turf-body > .drawer { display: none; }
+  .turf-body > .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: auto; max-height: 82vh;
+    border-left: 0; border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22);
+    z-index: 58;
+    animation: vd-sheet-in 0.2s ease-out;
+  }
   .txt-body  { grid-template-columns: 280px 1fr; }
   .txt-body  > .txt-ctx { display: none; }
   .scr-body  { grid-template-columns: 1fr 320px; }
@@ -1823,9 +2025,17 @@ svg.ico { display: block; }
   .map-wrap { height: 56vh; min-height: 280px; }
   .table-wrap { height: 60vh; }
   .scr-canvas { height: 56vh; border-right: none; }
+  /* Turf list stacks above the map; cap its height so it scrolls instead of pushing
+     the map off-screen. The detail stays a bottom sheet (set at the 1100px bp). */
+  .turf-body > .turf-list {
+    border-right: 0; border-bottom: 1px solid var(--border);
+    max-height: 40vh;
+  }
+  /* Filter bar narrows so it never overruns a phone-width map. */
+  .map-filter { width: calc(100% - 66px); max-width: 280px; }
   .module-head { flex-wrap: wrap; padding: 14px 16px 10px; }
   .module-head h1 { font-size: 20px; }
-  .module-head .acts { width: 100%; }
+  .module-head .acts { width: 100%; flex-wrap: wrap; }
   .kpi-row { grid-template-columns: 1fr 1fr; }
 }
 
