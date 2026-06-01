@@ -763,17 +763,48 @@ svg.ico { display: block; }
 
 /* ── Voters module ─────────────────────────────────────────────────────────── */
 .vot { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Two columns (filter rail + table) by default; the detail bar's third column is
+   only reserved when a voter is selected (.detail-open), so the table reclaims it. */
 .vot-body {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 240px 1fr 360px;
+  display: grid; grid-template-columns: 240px 1fr;
   overflow: hidden;
 }
+.vot-body.detail-open { grid-template-columns: 240px 1fr 360px; }
+/* Collapsed filter rail (desktop): drop the rail's column so the table reclaims it. */
+.vot-body.rail-collapsed { grid-template-columns: 1fr; }
+.vot-body.rail-collapsed.detail-open { grid-template-columns: 1fr 360px; }
+.vot-body.rail-collapsed > .filter-rail { display: none; }
 .filter-rail {
   border-right: 1px solid var(--border);
   background: var(--surface-2);
   overflow-y: auto;
   padding: 12px 0 24px;
 }
+/* Desktop filter-rail collapse: header (in-rail) + reopen button (in toolbar).
+   Both are desktop-only; on phone/tablet the rail is a fab-triggered drawer. */
+.filter-rail-collapse {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px 8px 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+.filter-rail-title {
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted);
+}
+.filter-rail-toggle {
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface); color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.filter-rail-toggle:hover { color: var(--ink); border-color: var(--border-2); background: var(--surface-3); }
+.filter-rail-toggle:focus-visible { outline: none; color: var(--ink); box-shadow: 0 0 0 2px var(--accent-2); }
+.rail-reopen { display: inline-flex; } /* desktop default; hidden on mobile below */
 .filter-search {
   display: flex; align-items: center; gap: 6px;
   margin: 4px 12px 8px;
@@ -839,6 +870,20 @@ svg.ico { display: block; }
   background: var(--tint);
   border-color: color-mix(in oklch, var(--accent) 35%, var(--border));
   color: var(--ink);
+}
+/* Candi-recommended tier — lime accent so it reads as the AI pick. Overrides the
+   generic .chip.ai tint with a strong lime border + tint; active = solid lime. */
+.chip-rec {
+  background: var(--accent-2);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.chip-rec:hover { background: color-mix(in oklch, var(--accent) 55%, var(--accent-2)); }
+.chip-rec.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 .filter-body .chip { width: calc(100% - 16px); justify-content: flex-start; }
 
@@ -959,11 +1004,14 @@ svg.ico { display: block; }
 
 /* ── Turf module ──────────────────────────────────────────────────────────── */
 .turf { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Turf list + map by default; the detail bar's third column is only reserved when
+   a turf is selected (.detail-open), so the map is wider until one is clicked. */
 .turf-body {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 280px 1fr 360px;
+  display: grid; grid-template-columns: 280px 1fr;
   overflow: hidden;
 }
+.turf-body.detail-open { grid-template-columns: 280px 1fr 360px; }
 .turf-list {
   border-right: 1px solid var(--border);
   background: var(--surface-2);
@@ -1392,8 +1440,12 @@ svg.ico { display: block; }
   .hq-grid { grid-template-columns: 1.3fr 1fr; }
 }
 @media (max-width: 1280px) {
-  .vot-body  { grid-template-columns: 220px 1fr 340px; }
-  .turf-body { grid-template-columns: 250px 1fr 340px; }
+  .vot-body  { grid-template-columns: 220px 1fr; }
+  .vot-body.detail-open  { grid-template-columns: 220px 1fr 340px; }
+  .vot-body.rail-collapsed { grid-template-columns: 1fr; }
+  .vot-body.rail-collapsed.detail-open { grid-template-columns: 1fr 340px; }
+  .turf-body { grid-template-columns: 250px 1fr; }
+  .turf-body.detail-open { grid-template-columns: 250px 1fr 340px; }
   .txt-body  { grid-template-columns: 280px 1fr 300px; }
 }
 @media (max-width: 1150px) {
@@ -1403,9 +1455,10 @@ svg.ico { display: block; }
   .topbar .searchbox { display: none; }
   .module-head { padding: 14px 16px 10px; }
   .module-head h1 { font-size: 19px; }
-  .vot-body  { grid-template-columns: 200px 1fr; }
+  .vot-body, .vot-body.detail-open  { grid-template-columns: 200px 1fr; }
+  .vot-body.rail-collapsed, .vot-body.rail-collapsed.detail-open { grid-template-columns: 1fr; }
   .vot-body  > .drawer { display: none; }
-  .turf-body { grid-template-columns: 250px 1fr; }
+  .turf-body, .turf-body.detail-open { grid-template-columns: 250px 1fr; }
   .turf-body > .drawer { display: none; }
   .txt-body  { grid-template-columns: 280px 1fr; }
   .txt-body  > .txt-ctx { display: none; }
@@ -1422,10 +1475,17 @@ svg.ico { display: block; }
 .filter-backdrop { display: none; }
 
 @media (max-width: 900px) {
-  .vot-body  { grid-template-columns: 1fr; }
+  .vot-body, .vot-body.detail-open,
+  .vot-body.rail-collapsed, .vot-body.rail-collapsed.detail-open { grid-template-columns: 1fr; }
+  /* On mobile the rail is a slide-in drawer (fab-triggered), so the desktop
+     collapse is a no-op here — still show the drawer when opened. */
   .vot-body  > .filter-rail { display: none; }
+  .vot-body.rail-collapsed > .filter-rail.open { display: block; }
 
   .filters-fab { display: inline-flex; }
+  /* Desktop rail-collapse affordances don't apply on mobile (drawer takes over). */
+  .filter-rail-collapse,
+  .rail-reopen { display: none; }
 
   .vot-body > .filter-rail.open {
     display: block;
@@ -1479,7 +1539,10 @@ svg.ico { display: block; }
   .mnav-item.active svg { color: var(--accent-ink); }
 
   /* single-column module bodies; give the map / table / tree explicit heights when stacked */
-  .vot-body, .turf-body, .txt-body, .scr-body { grid-template-columns: 1fr; }
+  .vot-body, .vot-body.detail-open,
+  .vot-body.rail-collapsed, .vot-body.rail-collapsed.detail-open,
+  .turf-body, .turf-body.detail-open,
+  .txt-body, .scr-body { grid-template-columns: 1fr; }
   .map-wrap { height: 56vh; min-height: 280px; }
   .table-wrap { height: 60vh; }
   .scr-canvas { height: 56vh; border-right: none; }
@@ -1578,7 +1641,7 @@ svg.ico { display: block; }
   text-align: left;
   display: flex; flex-direction: column; gap: 10px;
   padding: 18px;
-  height: 150px; /* uniform across complete, draft, and "new" cards */
+  height: 184px; /* uniform & tall enough for the fullest card (avatar + name + office·district + date) */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1646,10 +1709,10 @@ svg.ico { display: block; }
   font-size: 12.5px; font-weight: 500; color: var(--accent-ink);
 }
 
-/* Kebab delete affordance — upper-left, faint until hover/focus. When a kebab
-   is present, nudge the card's top row right so the avatar clears the kebab. */
-.campaign-card-wrap:has(.campaign-menu) .campaign-card-top { padding-left: 26px; }
-.campaign-menu { position: absolute; top: 12px; left: 10px; z-index: 2; }
+/* Kebab delete affordance — upper-RIGHT, faint until hover/focus. When a kebab
+   is present, pad the card's top row right so the avatar/draft tag clears the kebab. */
+.campaign-card-wrap:has(.campaign-menu) .campaign-card-top { padding-right: 26px; }
+.campaign-menu { position: absolute; top: 12px; right: 10px; z-index: 2; }
 .campaign-menu-btn {
   display: grid; place-items: center;
   width: 26px; height: 26px;
@@ -1672,7 +1735,7 @@ svg.ico { display: block; }
 }
 
 .campaign-menu-pop {
-  position: absolute; top: 32px; left: 0; z-index: 30;
+  position: absolute; top: 32px; right: 0; left: auto; z-index: 30;
   width: 224px;
   background: var(--surface);
   border: 1px solid var(--border-2);

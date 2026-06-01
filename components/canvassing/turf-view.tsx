@@ -34,11 +34,12 @@ export function TurfView({
   stats?: TurfStats;
 }) {
   const hdr = stats ?? { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 };
-  const [selId, setSelId] = useState<string | null>(turfs[0]?.id ?? null);
-  // Keep a valid selection as the real turf set loads/changes.
+  // Start with nothing selected so the detail bar stays collapsed and the map is
+  // full-width until a turf is clicked (mirrors the Voters pattern).
+  const [selId, setSelId] = useState<string | null>(null);
+  // Drop a stale selection if the turf it points at disappears as the real set loads.
   useEffect(() => {
-    if (turfs.length === 0) setSelId(null);
-    else if (!turfs.some((t) => t.id === selId)) setSelId(turfs[0].id);
+    if (selId !== null && !turfs.some((t) => t.id === selId)) setSelId(null);
   }, [turfs, selId]);
   const sel = useMemo(() => turfs.find((t) => t.id === selId) ?? null, [turfs, selId]);
 
@@ -66,7 +67,7 @@ export function TurfView({
         </div>
       </div>
 
-      <div className="turf-body">
+      <div className={"turf-body" + (sel ? " detail-open" : "")}>
         {/* ── Turf list ─────────────────────────────────────────────── */}
         <aside className="turf-list">
           <div className="vot-toolbar" style={{ padding: "10px 14px" }}>

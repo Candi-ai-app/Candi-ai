@@ -148,9 +148,10 @@ export function CampaignCard({
         </form>
       )}
 
-      {/* Delete affordance — owner/director only. Vertical kebab in the UPPER-LEFT,
+      {/* Delete affordance — owner/director only. Vertical kebab in the UPPER-RIGHT,
           faint until hover/focus. Sits above the card; all pointer events are
-          stopped so the card's select/resume action never fires. */}
+          stopped so the card's select/resume action never fires. The popover is
+          anchored to the right edge so it stays fully inside the card width. */}
       {canManage && (
         <div
           className={"campaign-menu" + (open ? " open" : "")}

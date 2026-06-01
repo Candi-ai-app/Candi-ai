@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Filter, Calendar } from "lucide-react";
 import { getRole, isAdminRole } from "@/lib/auth";
 import { getActiveCampaign, getActiveCampaignId } from "@/lib/campaign";
 import { createClient } from "@/utils/supabase/server";
@@ -211,10 +210,6 @@ export default async function HQPage() {
         <div className="sub">
           {campaign ? `${campaign.candidate}${campaign.office ? ` · ${campaign.office}` : ""}` : "No campaign selected"}
           {electionDate ? ` · ${daysLeft} days to election` : ""}
-        </div>
-        <div className="acts">
-          <button className="btn" type="button"><Filter className="ico" /> Filter</button>
-          <button className="btn" type="button"><Calendar className="ico" /> Today</button>
         </div>
       </div>
 

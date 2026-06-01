@@ -5,6 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Plus, SlidersHorizontal, Sparkles, Search, Send, Phone, MoreHorizontal,
   X, ChevronDown, MessageSquare, Footprints, Check as CheckIcon, Minus,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
 import { MAX_M, voteCount } from "@/lib/elections";
@@ -34,12 +35,13 @@ function turnoutPct(h: string): number {
   const pct = h.match(/(\d+)\s*%/);
   return pct ? parseInt(pct[1]) : 0;
 }
-const QUICKS: { k: string; label: string; ai?: boolean; match: (v: Voter) => boolean }[] = [
+const QUICKS: { k: string; label: string; ai?: boolean; rec?: boolean; match: (v: Voter) => boolean }[] = [
   { k: "persuadable", label: "Persuadable", match: (v) => v.flags.includes("persuadable") },
   { k: "highlow", label: "High-support · low-turnout", match: (v) => v.support >= 4 && turnoutPct(v.history) < 100 },
   { k: "vbm", label: "VBM outstanding", match: (v) => v.flags.includes("VBM") },
   { k: "never", label: "Never contacted", match: (v) => !v.last || v.last === "—" },
-  { k: "tier1", label: "✦ Candi recommends · Tier 1", ai: true, match: (v) => v.persuasion >= 4 },
+  // The AI-recommended tier — styled lime (the accent token) so it reads as Candi's pick.
+  { k: "tier1", label: "✦ Candi recommends · Tier 1", ai: true, rec: true, match: (v) => v.persuasion >= 4 },
 ];
 const SUPPORT_DEFS = [
   { v: 1, n: "Strong opp." }, { v: 2, n: "Lean opp." }, { v: 3, n: "Undecided" },
@@ -93,6 +95,7 @@ export function VotersView({
   const [svN, setSvN] = useState(3);
   const [svM, setSvM] = useState(MAX_M);
   const [showFilters, setShowFilters] = useState(false); // mobile drawer
+  const [railOpen, setRailOpen] = useState(true); // desktop filter-rail collapse
 
   // facet options + counts, derived from the loaded voter set (live or mock)
   const facets = useMemo(() => {
@@ -196,11 +199,10 @@ export function VotersView({
         <div className="acts">
           <button className="btn" type="button"><Plus className="ico" /> Import</button>
           <button className="btn" type="button"><SlidersHorizontal className="ico" /> Saved views</button>
-          <button className="btn accent" type="button"><Sparkles className="ico" /> Ask Candi</button>
         </div>
       </div>
 
-      <div className="vot-body">
+      <div className={"vot-body" + (sel ? " detail-open" : "") + (railOpen ? "" : " rail-collapsed")}>
         {/* mobile backdrop behind the filter drawer */}
         <div className={"filter-backdrop" + (showFilters ? " open" : "")} onClick={() => setShowFilters(false)} />
 
@@ -209,6 +211,20 @@ export function VotersView({
           <div className="filter-rail-close">
             <span>Filters{activeCount ? ` · ${activeCount}` : ""}</span>
             <X style={{ width: 18, height: 18, cursor: "pointer" }} onClick={() => setShowFilters(false)} />
+          </div>
+
+          {/* Desktop collapse header — hides the whole rail so the table reclaims width. */}
+          <div className="filter-rail-collapse">
+            <span className="filter-rail-title">Filters{activeCount ? ` · ${activeCount}` : ""}</span>
+            <button
+              type="button"
+              className="filter-rail-toggle"
+              aria-label="Collapse filters"
+              aria-expanded={true}
+              onClick={() => setRailOpen(false)}
+            >
+              <PanelLeftClose style={{ width: 15, height: 15 }} />
+            </button>
           </div>
 
           <div className="filter-search">
@@ -224,7 +240,7 @@ export function VotersView({
 
           <FilterSection title="Quick filters">
             {QUICKS.map((Q) => (
-              <Chip key={Q.k} ai={Q.ai} active={quick === Q.k} onClick={() => setQuick((c) => (c === Q.k ? null : Q.k))}>
+              <Chip key={Q.k} ai={Q.ai} rec={Q.rec} active={quick === Q.k} onClick={() => setQuick((c) => (c === Q.k ? null : Q.k))}>
                 {Q.label} ({(facets.quickCounts[Q.k] ?? 0).toLocaleString()})
               </Chip>
             ))}
@@ -288,6 +304,17 @@ export function VotersView({
               <button type="button" className="btn ghost filters-fab" onClick={() => setShowFilters(true)}>
                 <SlidersHorizontal style={{ width: 13, height: 13 }} /> Filters{activeCount ? ` · ${activeCount}` : ""}
               </button>
+              {!railOpen && (
+                <button
+                  type="button"
+                  className="btn ghost rail-reopen"
+                  aria-label="Show filters"
+                  aria-expanded={false}
+                  onClick={() => setRailOpen(true)}
+                >
+                  <PanelLeftOpen style={{ width: 13, height: 13 }} /> Filters{activeCount ? ` · ${activeCount}` : ""}
+                </button>
+              )}
               <span className="mono" style={{ fontWeight: 600 }}>{filtered.length.toLocaleString()}</span>
               <span className="muted">of <span className="mono">{facets.total.toLocaleString()}</span> voters</span>
               {!allParties && <span className="tag">{(Object.keys(party) as Party[]).filter((p) => party[p]).map(partyLabel).join("/") || "none"}</span>}
@@ -476,13 +503,15 @@ function Check({ label, count, checked = false, tone, ghost, onChange }: {
   );
 }
 
-function Chip({ children, ai, active, onClick }: { children: React.ReactNode; ai?: boolean; active?: boolean; onClick?: () => void }) {
+function Chip({ children, ai, rec, active, onClick }: { children: React.ReactNode; ai?: boolean; rec?: boolean; active?: boolean; onClick?: () => void }) {
+  // The recommends chip carries its own lime styling (incl. its active state) via
+  // .chip-rec; other chips use the shared dark-ink selected fill.
   return (
     <button
-      className={"chip" + (ai ? " ai" : "")}
+      className={"chip" + (ai ? " ai" : "") + (rec ? " chip-rec" : "") + (active ? " active" : "")}
       type="button"
       onClick={onClick}
-      style={active ? { background: "var(--ink)", color: "var(--bg)", borderColor: "var(--ink)" } : undefined}
+      style={!rec && active ? { background: "var(--ink)", color: "var(--bg)", borderColor: "var(--ink)" } : undefined}
     >
       {children}
     </button>

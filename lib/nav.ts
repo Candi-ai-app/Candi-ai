@@ -28,10 +28,10 @@ export type NavItem = {
  * at render from real campaign data; Texting has no real backing count, so no badge.
  */
 export const PRIMARY_NAV: NavItem[] = [
-  { label: "HQ Dashboard", href: "/", icon: LayoutDashboard, kbd: "G H" },
+  { label: "HQ Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Voters", href: "/voters", icon: Users, badgeMuted: true },
   { label: "Canvassing", href: "/canvassing", icon: Map },
-  { label: "Scripts", href: "/scripts", icon: GitBranch, kbd: "G S" },
+  { label: "Scripts", href: "/scripts", icon: GitBranch },
   { label: "Texting", href: "/texting", icon: MessageSquare },
 ];
 
