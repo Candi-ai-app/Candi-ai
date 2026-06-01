@@ -107,7 +107,7 @@
   background: color-mix(in oklch, var(--accent) 22%, var(--ink)); color: var(--accent); }
 .signin .tcard .tx { font-size: 12.5px; line-height: 1.4; color: oklch(0.9 0.01 250); }
 .signin .tcard .tx b { display: block; color: #fff; font-weight: 600; }
-.signin .tcard .tx .h { color: var(--mute-2); font-family: var(--f-mono); font-size: 10.5px; margin-bottom: 5px; }
+.signin .tcard .tx .h { display: block; color: var(--mute-2); font-family: var(--f-mono); font-size: 10.5px; margin-bottom: 5px; }
 @media (max-width: 1240px) { .signin .tcard:nth-child(2) { display: none; } }
 
 /* ===== entrance animations (si-prefixed) ===== */

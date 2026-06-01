@@ -1,0 +1,498 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "Candi ." [ref=e5] [cursor=pointer]:
+          - /url: "#top"
+          - img [ref=e7]
+          - text: Candi
+          - generic [ref=e11]: .
+        - navigation [ref=e12]:
+          - link "Product" [ref=e13] [cursor=pointer]:
+            - /url: "#product"
+          - link "Platform" [ref=e14] [cursor=pointer]:
+            - /url: "#peek"
+          - link "Security" [ref=e15] [cursor=pointer]:
+            - /url: "#security"
+          - link "Pricing" [ref=e16] [cursor=pointer]:
+            - /url: "#pricing"
+          - link "FAQ" [ref=e17] [cursor=pointer]:
+            - /url: "#faq"
+        - generic [ref=e18]:
+          - link "Log in" [ref=e19] [cursor=pointer]:
+            - /url: /login
+          - link "Book a demo" [ref=e20] [cursor=pointer]:
+            - /url: /login
+    - generic [ref=e23]:
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]: Nonpartisan · AI-native campaign OS
+          - generic [ref=e28]: Field organizing, ground up
+        - heading "Run your whole campaign from one screen." [level=1] [ref=e29]
+        - paragraph [ref=e30]: Candi is the nonpartisan, AI-native campaign OS — voter targeting, turf-cutting, canvassing, texting, and a live HQ in one place. Built for local and down-ballot campaigns, not just the statewide machine.
+        - generic [ref=e31]:
+          - link "Book a demo →" [ref=e32] [cursor=pointer]:
+            - /url: /login
+            - text: Book a demo
+            - generic [ref=e33]: →
+          - link "See the platform" [ref=e34] [cursor=pointer]:
+            - /url: "#peek"
+        - generic [ref=e35]: No VAN gatekeeping · set up in a day · your data stays yours
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: C
+            - generic [ref=e43]: Candi v1·MVP
+          - generic [ref=e44]:
+            - generic [ref=e45]: DR
+            - generic [ref=e46]:
+              - generic [ref=e47]: Campaign
+              - generic [ref=e48]: Dana Reyes
+            - generic [ref=e49]: Switch
+          - generic [ref=e50]: Campaign OS
+          - navigation [ref=e51]:
+            - generic [ref=e52]:
+              - img [ref=e53]
+              - generic [ref=e58]: HQ Dashboard
+            - generic [ref=e59]:
+              - img [ref=e60]
+              - generic [ref=e65]: Voters
+            - generic [ref=e66]:
+              - img [ref=e67]
+              - generic [ref=e71]: Canvassing
+            - generic [ref=e72]:
+              - img [ref=e73]
+              - generic [ref=e77]: Scripts
+            - generic [ref=e78]:
+              - img [ref=e79]
+              - generic [ref=e81]: Texting
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - generic [ref=e85]:
+              - generic [ref=e86]: HQ Dashboard
+              - generic [ref=e87]: Dana Reyes · City Council · 171 days to election
+            - generic [ref=e88]: Live · updated 2m ago
+          - generic [ref=e90]:
+            - generic [ref=e92]:
+              - text: "171"
+              - generic [ref=e93]: days to Election Day · Nov 3
+            - generic [ref=e96]:
+              - generic [ref=e97]: This week's focus
+              - text: Lock down Precinct 12 turnout — 3 GOTV shifts left.
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - img [ref=e100]
+              - generic [ref=e103]: Doors knocked · today
+              - generic [ref=e104]: 1,940
+              - generic [ref=e105]: 8,412 attempts total
+            - generic [ref=e106]:
+              - img [ref=e107]
+              - generic [ref=e109]: Contacts made
+              - generic [ref=e110]: 5,120/ 61% of doors
+              - generic [ref=e111]: contact rate
+            - generic [ref=e112]:
+              - img [ref=e113]
+              - generic [ref=e116]:
+                - generic [ref=e117]: Supporters ID'd
+                - generic [ref=e118]: 2,308· 4–5
+              - generic [ref=e119]: this cycle
+            - generic [ref=e120]:
+              - img [ref=e121]
+              - generic [ref=e124]: VBM flagged
+              - generic [ref=e125]: 1,204
+              - generic [ref=e126]: vote-by-mail voters
+          - generic [ref=e127]:
+            - generic [ref=e128]:
+              - generic [ref=e129]:
+                - generic [ref=e130]: Knock velocity
+                - generic [ref=e131]: · last 14 days
+                - generic [ref=e132]:
+                  - generic [ref=e133]: Today
+                  - generic [ref=e134]: 7d
+                  - generic [ref=e135]: 14d
+                  - generic [ref=e136]: 30d
+                  - generic [ref=e137]: All
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - generic [ref=e140]: 6,480 doors · last 14 days
+                  - generic [ref=e141]: peak 712/day
+                - img [ref=e142]
+                - generic [ref=e159]:
+                  - generic [ref=e160]: Doors
+                  - generic [ref=e161]: Contacts
+                  - generic [ref=e162]: Support
+            - generic [ref=e163]:
+              - generic [ref=e164]:
+                - generic [ref=e165]: AI
+                - generic [ref=e166]: Candi suggests
+                - generic [ref=e167]: · 3
+                - generic [ref=e168]: Preview
+              - generic [ref=e169]:
+                - generic [ref=e170]:
+                  - generic [ref=e172]: "86"
+                  - generic [ref=e173]:
+                    - generic [ref=e174]: Re-canvass Precinct 12S tomorrow AM
+                    - generic [ref=e175]:
+                      - generic [ref=e176]: Turf
+                      - generic [ref=e177]: Modeling
+                - generic [ref=e178]:
+                  - generic [ref=e180]: "79"
+                  - generic [ref=e181]:
+                    - generic [ref=e182]: Move 220 renters to the renter-relief script
+                    - generic [ref=e183]:
+                      - generic [ref=e184]: Script
+                      - generic [ref=e185]: Persuasion
+                - generic [ref=e186]:
+                  - text: View more (1)
+                  - img [ref=e187]
+          - generic [ref=e189]:
+            - generic [ref=e190]:
+              - generic [ref=e191]: Canvassers in field
+              - generic [ref=e192]: · 3 canvassers
+            - generic [ref=e194]:
+              - generic [ref=e195]:
+                - generic [ref=e196]: DR
+                - generic [ref=e197]:
+                  - generic [ref=e198]: Diego Reyes
+                  - generic [ref=e199]: Oak Hill · active
+                - generic [ref=e200]: 312 doors
+              - generic [ref=e201]:
+                - generic [ref=e202]: AB
+                - generic [ref=e203]:
+                  - generic [ref=e204]: Aisha Batra
+                  - generic [ref=e205]: Riverside · active
+                - generic [ref=e206]: 268 doors
+              - generic [ref=e207]:
+                - generic [ref=e208]: TW
+                - generic [ref=e209]:
+                  - generic [ref=e210]: Tom Whitfield
+                  - generic [ref=e211]: Midtown
+                - generic [ref=e212]: 154 doors
+    - generic [ref=e214]:
+      - generic [ref=e215]: Powering campaigns & committees in 28 states
+      - generic [ref=e216]:
+        - generic [ref=e217]: Mayoral '26
+        - generic [ref=e218]: State Senate 14
+        - generic [ref=e219]: Yes on 3
+        - generic [ref=e220]: County Forward
+        - generic [ref=e221]: District 7
+        - generic [ref=e222]: Civic Action
+    - generic [ref=e224]:
+      - generic [ref=e225]:
+        - generic [ref=e226]: One platform, five jobs
+        - heading "Every part of field, finally connected." [level=2] [ref=e228]
+        - paragraph [ref=e229]: Stop stitching together a spreadsheet, a texting tool, and a clipboard. Candi runs targeting through turnout on one shared source of truth.
+      - generic [ref=e230]:
+        - article [ref=e231]:
+          - img [ref=e233]
+          - heading "Voters" [level=3] [ref=e237]
+          - paragraph [ref=e238]: Modeled support & turnout scores on every voter. Build segments in seconds, not SQL.
+        - article [ref=e245]:
+          - img [ref=e247]
+          - heading "Turf" [level=3] [ref=e250]
+          - paragraph [ref=e251]: Cut balanced walk lists by the numbers and hand them to canvassers on any phone.
+        - article [ref=e256]:
+          - img [ref=e258]
+          - heading "Scripts" [level=3] [ref=e261]
+          - paragraph [ref=e262]: Adaptive scripts that brief volunteers and capture clean data at the door.
+        - article [ref=e269]:
+          - img [ref=e271]
+          - heading "Texting" [level=3] [ref=e273]
+          - paragraph [ref=e274]: Peer-to-peer and broadcast texting with compliance baked in — segment from the same voter file your canvassers use, and route replies to a real person.
+          - generic [ref=e276]:
+            - generic [ref=e277]: Where's my polling place?
+            - generic [ref=e278]: Riverside Elementary, 7a–8p. Want a reminder?
+        - article [ref=e279]:
+          - img [ref=e281]
+          - heading "HQ" [level=3] [ref=e284]
+          - paragraph [ref=e285]: "A live command center: doors knocked, texts sent, modeled turnout lift, and volunteer activity updating in real time — so you can move resources where they'll win votes."
+          - generic [ref=e287]:
+            - generic [ref=e288]:
+              - generic [ref=e289]: 1,940
+              - text: Doors today
+            - generic [ref=e290]:
+              - generic [ref=e291]: +4.2pt
+              - text: Turnout lift
+    - generic [ref=e295]:
+      - generic [ref=e307]:
+        - generic [ref=e308]: Your district, live
+        - heading "Every door on the map. Every voter in reach." [level=2] [ref=e309]
+        - paragraph [ref=e310]: Candi turns your turf into a living map your whole team works from — scroll to open the field.
+      - generic [ref=e311]:
+        - text: Scroll
+        - generic [ref=e312]: ↓
+    - generic [ref=e315]:
+      - generic [ref=e316]:
+        - generic [ref=e317]:
+          - generic [ref=e318]: The platform
+          - heading "See the whole field operation." [level=2] [ref=e320]
+          - paragraph [ref=e321]: Click through the modules your team lives in every day.
+        - generic [ref=e322]:
+          - button "Voters" [ref=e323] [cursor=pointer]
+          - button "Turf" [ref=e324] [cursor=pointer]
+          - button "Texting" [ref=e325] [cursor=pointer]
+          - button "HQ" [ref=e326] [cursor=pointer]
+      - generic [ref=e328]:
+        - generic [ref=e329]:
+          - generic [ref=e330]:
+            - generic [ref=e331]: C
+            - generic [ref=e332]: Candi v1·MVP
+          - generic [ref=e333]:
+            - generic [ref=e334]: DR
+            - generic [ref=e335]:
+              - generic [ref=e336]: Campaign
+              - generic [ref=e337]: Dana Reyes
+            - generic [ref=e338]: Switch
+          - generic [ref=e339]: Campaign OS
+          - navigation [ref=e340]:
+            - generic [ref=e341]:
+              - img [ref=e342]
+              - generic [ref=e347]: HQ Dashboard
+            - generic [ref=e348]:
+              - img [ref=e349]
+              - generic [ref=e354]: Voters
+            - generic [ref=e355]:
+              - img [ref=e356]
+              - generic [ref=e358]: Canvassing
+            - generic [ref=e359]:
+              - img [ref=e360]
+              - generic [ref=e364]: Scripts
+            - generic [ref=e365]:
+              - img [ref=e366]
+              - generic [ref=e368]: Texting
+        - generic [ref=e369]:
+          - generic [ref=e370]:
+            - generic [ref=e371]: Voters
+            - generic [ref=e372]: 48,210 in view · 6 shown
+          - table [ref=e374]:
+            - rowgroup [ref=e375]:
+              - row "Voter Precinct Support score Segment" [ref=e376]:
+                - columnheader "Voter" [ref=e377]
+                - columnheader "Precinct" [ref=e378]
+                - columnheader "Support score" [ref=e379]
+                - columnheader "Segment" [ref=e380]
+            - rowgroup [ref=e381]:
+              - row "Maria Alvarez Precinct 12 92 Persuadable" [ref=e382]:
+                - cell "Maria Alvarez" [ref=e383]
+                - cell "Precinct 12" [ref=e384]
+                - cell "92" [ref=e385]:
+                  - generic [ref=e386]: "92"
+                - cell "Persuadable" [ref=e389]
+              - row "James Okonkwo Precinct 12 78 GOTV" [ref=e390]:
+                - cell "James Okonkwo" [ref=e391]
+                - cell "Precinct 12" [ref=e392]
+                - cell "78" [ref=e393]:
+                  - generic [ref=e394]: "78"
+                - cell "GOTV" [ref=e397]
+              - row "Dolores Kim Precinct 09 64 Persuadable" [ref=e398]:
+                - cell "Dolores Kim" [ref=e399]
+                - cell "Precinct 09" [ref=e400]
+                - cell "64" [ref=e401]:
+                  - generic [ref=e402]: "64"
+                - cell "Persuadable" [ref=e405]
+              - row "Frank Russo Precinct 14 41 Low-turnout" [ref=e406]:
+                - cell "Frank Russo" [ref=e407]
+                - cell "Precinct 14" [ref=e408]
+                - cell "41" [ref=e409]:
+                  - generic [ref=e410]: "41"
+                - cell "Low-turnout" [ref=e413]
+              - row "Aisha Batra Precinct 09 88 GOTV" [ref=e414]:
+                - cell "Aisha Batra" [ref=e415]
+                - cell "Precinct 09" [ref=e416]
+                - cell "88" [ref=e417]:
+                  - generic [ref=e418]: "88"
+                - cell "GOTV" [ref=e421]
+              - row "Tom Whitfield Precinct 14 55 Persuadable" [ref=e422]:
+                - cell "Tom Whitfield" [ref=e423]
+                - cell "Precinct 14" [ref=e424]
+                - cell "55" [ref=e425]:
+                  - generic [ref=e426]: "55"
+                - cell "Persuadable" [ref=e429]
+    - generic [ref=e432]:
+      - generic [ref=e433]:
+        - generic [ref=e434]: Data & integrations
+        - heading "Bring your voter file. Keep your stack." [level=2] [ref=e436]
+        - paragraph [ref=e437]: Candi imports the L2 / state voter files you already use and syncs with the tools your campaign runs on — no rip-and-replace, no exports held hostage.
+        - generic [ref=e438]:
+          - generic [ref=e439]: L2 & state voter files
+          - generic [ref=e441]: ActBlue / WinRed
+          - generic [ref=e443]: Google & Microsoft SSO
+          - generic [ref=e445]: Mailchimp
+          - generic [ref=e447]: Zapier
+          - generic [ref=e449]: CSV in & out, anytime
+      - generic [ref=e451]:
+        - img [ref=e455]
+        - generic [ref=e459]: L2
+        - generic [ref=e460]: SSO
+        - generic [ref=e461]: AB
+        - generic [ref=e462]: CSV
+        - generic [ref=e463]: Zap
+    - generic [ref=e465]:
+      - generic [ref=e466]:
+        - generic [ref=e467]: Security & compliance
+        - heading "Built for the trust a campaign runs on." [level=2] [ref=e469]
+        - paragraph [ref=e470]: Voter data is sensitive and regulated. Candi treats it that way from day one.
+      - generic [ref=e471]:
+        - generic [ref=e472]:
+          - img [ref=e474]
+          - heading "SOC 2 Type II" [level=4] [ref=e477]
+          - paragraph [ref=e478]: Independently audited controls across security, availability, and confidentiality.
+        - generic [ref=e479]:
+          - img [ref=e481]
+          - heading "Encrypted end to end" [level=4] [ref=e485]
+          - paragraph [ref=e486]: TLS in transit, AES-256 at rest. Field-level encryption on voter PII.
+        - generic [ref=e487]:
+          - img [ref=e489]
+          - heading "Role-based access" [level=4] [ref=e493]
+          - paragraph [ref=e494]: Granular permissions and full audit logs — staff see only what their role allows.
+        - generic [ref=e495]:
+          - img [ref=e497]
+          - heading "TCPA & opt-out aware" [level=4] [ref=e500]
+          - paragraph [ref=e501]: Texting compliance, consent tracking, and suppression handled automatically.
+    - generic [ref=e503]:
+      - generic [ref=e504]:
+        - generic [ref=e505]: Pricing
+        - heading "Priced for the whole ballot." [level=2] [ref=e507]
+        - paragraph [ref=e508]: Local campaigns shouldn't pay statewide prices. Start free, scale when you do.
+      - generic [ref=e509]:
+        - generic [ref=e510]:
+          - generic [ref=e511]: Local
+          - generic [ref=e512]: $0 / mo
+          - paragraph [ref=e513]: For first-time and small down-ballot campaigns getting off the ground.
+          - list [ref=e514]:
+            - listitem [ref=e515]:
+              - generic [ref=e516]: ✓
+              - text: Up to 25,000 voters
+            - listitem [ref=e517]:
+              - generic [ref=e518]: ✓
+              - text: Voters, Turf & Scripts
+            - listitem [ref=e519]:
+              - generic [ref=e520]: ✓
+              - text: 2 staff seats
+            - listitem [ref=e521]:
+              - generic [ref=e522]: ✓
+              - text: CSV import / export
+          - link "Start free" [ref=e523] [cursor=pointer]:
+            - /url: /login
+        - generic [ref=e524]:
+          - generic [ref=e525]: Most popular
+          - generic [ref=e526]: Campaign
+          - generic [ref=e527]: $390 / mo
+          - paragraph [ref=e528]: For competitive local and legislative races running a real field program.
+          - list [ref=e529]:
+            - listitem [ref=e530]:
+              - generic [ref=e531]: ✓
+              - text: Unlimited voters in-district
+            - listitem [ref=e532]:
+              - generic [ref=e533]: ✓
+              - text: Everything in Local + Texting & HQ
+            - listitem [ref=e534]:
+              - generic [ref=e535]: ✓
+              - text: Unlimited staff & volunteers
+            - listitem [ref=e536]:
+              - generic [ref=e537]: ✓
+              - text: Candi AI targeting & scripts
+            - listitem [ref=e538]:
+              - generic [ref=e539]: ✓
+              - text: Integrations & SSO
+          - link "Book a demo" [ref=e540] [cursor=pointer]:
+            - /url: /login
+        - generic [ref=e541]:
+          - generic [ref=e542]: Committee
+          - generic [ref=e543]: Custom
+          - paragraph [ref=e544]: For party committees and PACs running many campaigns at once.
+          - list [ref=e545]:
+            - listitem [ref=e546]:
+              - generic [ref=e547]: ✓
+              - text: Multi-campaign workspaces
+            - listitem [ref=e548]:
+              - generic [ref=e549]: ✓
+              - text: Shared data & turf across races
+            - listitem [ref=e550]:
+              - generic [ref=e551]: ✓
+              - text: SOC 2 report & DPA
+            - listitem [ref=e552]:
+              - generic [ref=e553]: ✓
+              - text: Dedicated support
+          - link "Contact sales" [ref=e554] [cursor=pointer]:
+            - /url: /login
+    - generic [ref=e556]:
+      - generic [ref=e557]:
+        - generic [ref=e558]: FAQ
+        - heading "Questions, answered." [level=2] [ref=e560]
+      - generic [ref=e561]:
+        - group [ref=e562]:
+          - generic "Is Candi really nonpartisan? +" [ref=e563] [cursor=pointer]:
+            - text: Is Candi really nonpartisan?
+            - generic [ref=e564]: +
+          - generic [ref=e565]: Yes. Candi is infrastructure, not a side. Any campaign, committee, or advocacy org can use it — your data is yours, and we never share it across customers.
+        - group [ref=e566]:
+          - generic "Do I need a voter file already? +" [ref=e567] [cursor=pointer]:
+            - text: Do I need a voter file already?
+            - generic [ref=e568]: +
+        - group [ref=e569]:
+          - generic "How is this different from VAN? +" [ref=e570] [cursor=pointer]:
+            - text: How is this different from VAN?
+            - generic [ref=e571]: +
+        - group [ref=e572]:
+          - generic "What does \"AI-native\" actually mean here? +" [ref=e573] [cursor=pointer]:
+            - text: What does "AI-native" actually mean here?
+            - generic [ref=e574]: +
+        - group [ref=e575]:
+          - generic "Can volunteers use it without training? +" [ref=e576] [cursor=pointer]:
+            - text: Can volunteers use it without training?
+            - generic [ref=e577]: +
+    - generic [ref=e580]:
+      - heading "See Candi on your race." [level=2] [ref=e1104]
+      - paragraph [ref=e1105]: A 30-minute demo on your district, your voter file, your ballot. No commitment.
+      - generic [ref=e1106]:
+        - link "Book a demo →" [ref=e1107] [cursor=pointer]:
+          - /url: /login
+          - text: Book a demo
+          - generic [ref=e1108]: →
+        - link "Talk to the team" [ref=e1109] [cursor=pointer]:
+          - /url: /login
+    - contentinfo [ref=e1110]:
+      - generic [ref=e1111]:
+        - generic [ref=e1112]:
+          - generic [ref=e1113]:
+            - generic [ref=e1114]:
+              - img [ref=e1116]
+              - text: Candi
+              - generic [ref=e1120]: .
+            - paragraph [ref=e1121]: The nonpartisan, AI-native campaign operating system. Field organizing, ground up.
+          - generic [ref=e1122]:
+            - heading "Product" [level=5] [ref=e1123]
+            - link "Voters" [ref=e1124] [cursor=pointer]:
+              - /url: "#product"
+            - link "Turf" [ref=e1125] [cursor=pointer]:
+              - /url: "#product"
+            - link "Texting" [ref=e1126] [cursor=pointer]:
+              - /url: "#product"
+            - link "HQ" [ref=e1127] [cursor=pointer]:
+              - /url: "#peek"
+          - generic [ref=e1128]:
+            - heading "Company" [level=5] [ref=e1129]
+            - link "About" [ref=e1130] [cursor=pointer]:
+              - /url: "#top"
+            - link "Security" [ref=e1131] [cursor=pointer]:
+              - /url: "#security"
+            - link "Pricing" [ref=e1132] [cursor=pointer]:
+              - /url: "#pricing"
+            - link "Careers" [ref=e1133] [cursor=pointer]:
+              - /url: "#top"
+          - generic [ref=e1134]:
+            - heading "Resources" [level=5] [ref=e1135]
+            - link "Docs" [ref=e1136] [cursor=pointer]:
+              - /url: "#top"
+            - link "Onboarding" [ref=e1137] [cursor=pointer]:
+              - /url: "#top"
+            - link "FAQ" [ref=e1138] [cursor=pointer]:
+              - /url: "#faq"
+            - link "Status" [ref=e1139] [cursor=pointer]:
+              - /url: "#top"
+        - generic [ref=e1140]:
+          - generic [ref=e1141]: Nonpartisan infrastructure
+          - generic [ref=e1142]: © 2026 Candi. All rights reserved.
+          - generic [ref=e1143]: Privacy · Terms · DPA
+  - alert [ref=e1144]

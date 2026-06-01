@@ -105,7 +105,9 @@
 .lp .brand { display: flex; align-items: center; gap: 11px; font-weight: 600; font-size: 19px; letter-spacing: -0.02em; }
 .lp .brand .bm { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; color: var(--ink); }
 .lp .brand .bm svg { width: 21px; height: 21px; }
-.lp .brand .dot { color: var(--accent-deep); }
+/* the brand "." is a literal period — neutralize globals.css's box-style .dot leak */
+.lp .brand .dot { color: var(--accent-deep); display: inline; width: auto; height: auto;
+  background: none; border-radius: 0; box-shadow: none; vertical-align: baseline; }
 .lp .nav .links { display: flex; gap: 26px; margin-left: 8px; }
 .lp .nav .links a { font-size: 14.5px; color: var(--ink-2); }
 .lp .nav .links a:hover { color: var(--ink); }
@@ -383,6 +385,11 @@
 @media (max-width: 640px) {
   .lp { --pad: 22px; }
   .lp .nav .links { display: none; }
+  .lp .nav .row { gap: 12px; height: 60px; }
+  .lp .nav .brand { font-size: 17px; }
+  .lp .nav .right { gap: 9px; }
+  .lp .nav .right .login { font-size: 13.5px; }
+  .lp .nav .right .btn { padding: 9px 14px; font-size: 13.5px; }
   .lp .h1 { font-size: 44px; }
   .lp .sec-title { font-size: 34px; }
   .lp .sec { padding: 72px 0; }
