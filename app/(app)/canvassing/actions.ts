@@ -283,3 +283,24 @@ export async function setTurfStatus(
   revalidatePath("/canvassing");
   return { ok: true };
 }
+
+/** Permanently delete a turf. Scoped to the active campaign. The saved-turfs
+ *  layer on the map refreshes via router.refresh() after the action resolves. */
+export async function deleteTurf(
+  turfId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("turfs")
+    .delete()
+    .eq("id", turfId)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("deleteTurf:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true };
+}

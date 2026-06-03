@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   Layers, Sparkles, Plus, Search, SlidersHorizontal, X,
   MapPinned, Users, DoorOpen, Route, FileText, Activity,
-  ChevronDown,
+  ChevronDown, Trash2,
 } from "lucide-react";
 import type { VoterPoint, TurfListItem, TurfStats, CampaignMember } from "@/app/(app)/canvassing/actions";
-import { assignTurf, setTurfStatus } from "@/app/(app)/canvassing/actions";
+import { assignTurf, setTurfStatus, deleteTurf } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
 import type { TurfMapControls } from "@/components/canvassing/turf-map";
 
@@ -212,6 +212,21 @@ function TurfDetail({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDelete = () => {
+    setActionError(null);
+    startTransition(async () => {
+      const res = await deleteTurf(t.id);
+      if (!res.ok) {
+        setActionError(res.error ?? "Failed to delete turf");
+        setConfirmDelete(false);
+        return;
+      }
+      router.refresh();
+      onClose();
+    });
+  };
 
   const handleAssign = (memberId: string) => {
     setActionError(null);
@@ -356,6 +371,47 @@ function TurfDetail({
             <span className="turf-soon-label">Per-door activity</span>
             <span className="turf-soon-tag">Not tracked yet</span>
           </div>
+        </div>
+
+        {/* ── Delete ──────────────────────────────────────────────── */}
+        <div className="turf-detail-section" style={{ marginTop: "auto", paddingTop: 16 }}>
+          {confirmDelete ? (
+            <div className="turf-delete-confirm">
+              <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                Delete <b>{t.name}</b>? This can't be undone.
+              </span>
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ flex: 1, fontSize: 12 }}
+                  disabled={isPending}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ flex: 1, fontSize: 12, background: "var(--rose)", color: "#fff", borderColor: "var(--rose)" }}
+                  disabled={isPending}
+                  onClick={handleDelete}
+                >
+                  {isPending ? "Deleting…" : "Delete turf"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ width: "100%", color: "var(--rose)", borderColor: "var(--rose,#f43f5e)", fontSize: 13, gap: 6 }}
+              disabled={isPending}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 style={{ width: 13, height: 13 }} /> Delete turf
+            </button>
+          )}
         </div>
       </div>
     </aside>
