@@ -21,6 +21,8 @@ export type NavItem = {
   kbd?: string;
   badge?: string;
   badgeMuted?: boolean;
+  /** Greyed-out / non-interactive — built but not ready to demo. */
+  comingSoon?: boolean;
 };
 
 /**
@@ -33,8 +35,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "Voters", href: "/voters", icon: Users, badgeMuted: true },
   { label: "Canvassing", href: "/canvassing", icon: Map },
   { label: "Field", href: "/field", icon: Navigation },
-  { label: "Scripts", href: "/scripts", icon: GitBranch },
-  { label: "Texting", href: "/texting", icon: MessageSquare },
+  { label: "Scripts", href: "/scripts", icon: GitBranch, comingSoon: true },
+  { label: "Texting", href: "/texting", icon: MessageSquare, comingSoon: true },
 ];
 
 /** The "Coming in V2" shelf — visible but disabled. */

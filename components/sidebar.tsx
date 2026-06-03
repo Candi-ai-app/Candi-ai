@@ -83,6 +83,15 @@ export function Sidebar({
       <nav className="nav">
         {nav.map((item) => {
           const Icon = item.icon;
+          if (item.comingSoon) {
+            return (
+              <a key={item.href} className="soon" aria-disabled="true" title={`${item.label} — coming soon`}>
+                <Icon className="ico" />
+                <span>{item.label}</span>
+                <span className="badge muted">SOON</span>
+              </a>
+            );
+          }
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const badge = badgeFor(item.href);
           return (
