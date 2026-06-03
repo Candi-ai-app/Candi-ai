@@ -375,6 +375,10 @@ export function TurfMap({
     map.addControl(draw as unknown as mapboxgl.IControl, "top-left");
 
     map.on("load", () => {
+      // Force a resize on first load. The component is loaded via next/dynamic
+      // (ssr:false), so Mapbox initializes before the browser has settled the
+      // grid layout — the canvas renders transparent until it knows its size.
+      map.resize();
       addLayers(map);
 
       // Hover cursor on saved turfs
