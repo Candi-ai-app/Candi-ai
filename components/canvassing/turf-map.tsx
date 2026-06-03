@@ -9,9 +9,11 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import {
   saveTurf,
   listTurfs,
+  setTurfRoute,
   type SavedTurf,
   type GeoPolygon,
   type VoterPoint,
+  type RouteStop,
 } from "@/app/(app)/canvassing/actions";
 import { voteCount, MAX_M, type VoteHistoryMap } from "@/lib/elections";
 
@@ -84,6 +86,102 @@ function pointsBounds(points: VoterPoint[]): [number, number, number, number] | 
   return [w, s, e, n];
 }
 
+// ── Walking-route optimization ──────────────────────────────────────────────
+function haversineMi(a: { lng: number; lat: number }, b: { lng: number; lat: number }): number {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const la1 = (a.lat * Math.PI) / 180, la2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function routeLengthMi(stops: RouteStop[]): number {
+  let d = 0;
+  for (let i = 1; i < stops.length; i++) d += haversineMi(stops[i - 1], stops[i]);
+  return d;
+}
+
+/** Nearest-neighbor seed + 2-opt refinement (open path). Good for a few hundred doors. */
+function optimizeRoute(stops: RouteStop[]): RouteStop[] {
+  const n = stops.length;
+  if (n <= 2) return stops.slice();
+
+  // Start from the south-west-most door (a natural corner).
+  let start = 0;
+  for (let i = 1; i < n; i++) {
+    if (stops[i].lat + stops[i].lng < stops[start].lat + stops[start].lng) start = i;
+  }
+
+  const used = new Array(n).fill(false);
+  const order: RouteStop[] = [stops[start]];
+  used[start] = true;
+  let cur = start;
+  for (let k = 1; k < n; k++) {
+    let best = -1, bestD = Infinity;
+    for (let j = 0; j < n; j++) {
+      if (used[j]) continue;
+      const d = haversineMi(stops[cur], stops[j]);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    used[best] = true;
+    order.push(stops[best]);
+    cur = best;
+  }
+
+  // 2-opt for an open path. Cap passes for large sets so it stays snappy.
+  const maxPasses = n > 200 ? 1 : 5;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let improved = false;
+    for (let i = 0; i < n - 1; i++) {
+      for (let j = i + 2; j < n; j++) {
+        const a = order[i], b = order[i + 1], c = order[j];
+        const dNext = j + 1 < n ? order[j + 1] : null;
+        const before = haversineMi(a, b) + (dNext ? haversineMi(c, dNext) : 0);
+        const after = haversineMi(a, c) + (dNext ? haversineMi(b, dNext) : 0);
+        if (after + 1e-9 < before) {
+          let lo = i + 1, hi = j;
+          while (lo < hi) { const t = order[lo]; order[lo] = order[hi]; order[hi] = t; lo++; hi--; }
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+  return order;
+}
+
+function routeLineFC(stops: RouteStop[] | null) {
+  if (!stops || stops.length < 2) return EMPTY_FC;
+  return {
+    type: "FeatureCollection" as const,
+    features: [{
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: stops.map((s) => [s.lng, s.lat]) },
+      properties: {},
+    }],
+  };
+}
+
+function routeEndsFC(stops: RouteStop[] | null) {
+  if (!stops || stops.length === 0) return EMPTY_FC;
+  const ends: Array<{ lng: number; lat: number; kind: string }> = [
+    { lng: stops[0].lng, lat: stops[0].lat, kind: "start" },
+  ];
+  if (stops.length > 1) {
+    const last = stops[stops.length - 1];
+    ends.push({ lng: last.lng, lat: last.lat, kind: "end" });
+  }
+  return {
+    type: "FeatureCollection" as const,
+    features: ends.map((e) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [e.lng, e.lat] },
+      properties: { kind: e.kind },
+    })),
+  };
+}
+
 /**
  * Auto-slice filtered voters into N balanced turfs (longitude-strip method).
  * Sorts voters W→E, splits into N equal-count strips, returns one padded
@@ -126,9 +224,11 @@ function autoSliceTurfs(
 /** Controls exposed to TurfView via onReady. */
 export type TurfMapControls = {
   startDraw: () => void;
-  /** Auto-cut n balanced turfs from the currently filtered voter set. */
-  autoCut: (n: number) => Promise<{ saved: number; error?: string }>;
-  /** Current count of filtered voters (for the AI-cut panel label). */
+  /** Split the currently filtered voter set into n equal-count turfs (planning aid). */
+  splitEqually: (n: number) => Promise<{ saved: number; error?: string }>;
+  /** Optimize a walking route over the doors inside a saved turf, persist + draw it. */
+  generateRoute: (turfId: string) => Promise<{ stops: number; distanceMi?: number; error?: string }>;
+  /** Current count of filtered voters (for the split panel label). */
   getFilteredCount: () => number;
 };
 
@@ -186,6 +286,10 @@ export function TurfMap({
   const onTurfClickRef = useRef(onTurfClick);
   onTurfClickRef.current = onTurfClick;
 
+  // Latest saved turfs for the (once-registered) generateRoute control.
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
   const refresh = async () => {
     const turfs = await listTurfs();
     setSaved(turfs);
@@ -210,6 +314,21 @@ export function TurfMap({
         paint: { "line-color": "#ffffff", "line-width": 3, "line-opacity": 0.9 } });
       map.addLayer({ id: "selected-fill", type: "fill", source: "selected-turf",
         paint: { "fill-color": "#a3e635", "fill-opacity": 0.32 } });
+    }
+    // Walking route for the selected turf (line + start/end markers)
+    if (!map.getSource("route-line")) {
+      map.addSource("route-line", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "route-line-layer", type: "line", source: "route-line",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#1d4ed8", "line-width": 2.5, "line-dasharray": [2, 1.4], "line-opacity": 0.9 } });
+      map.addSource("route-ends", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "route-ends-layer", type: "circle", source: "route-ends",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": ["match", ["get", "kind"], "start", "#16a34a", "end", "#f43f5e", "#1d4ed8"],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        } });
     }
     // Voter points
     if (!map.getSource("voter-points")) {
@@ -298,7 +417,7 @@ export function TurfMap({
     onReady?.({
       startDraw: () => draw.changeMode("draw_polygon"),
 
-      autoCut: async (n: number) => {
+      splitEqually: async (n: number) => {
         const slices = autoSliceTurfs(filteredRef.current, n);
         if (slices.length === 0) return { saved: 0, error: "No voters match the current filter" };
         let savedCount = 0;
@@ -309,6 +428,38 @@ export function TurfMap({
         await refresh();
         router.refresh();
         return { saved: savedCount };
+      },
+
+      generateRoute: async (turfId: string) => {
+        const turf = savedRef.current.find((t) => t.id === turfId);
+        if (!turf?.boundary || turf.boundary.type !== "Polygon") {
+          return { stops: 0, error: "This turf has no drawn boundary to route." };
+        }
+        const ring = turf.boundary.coordinates[0] ?? [];
+        // Walk the doors the canvasser is currently targeting (filtered set),
+        // deduped by address so one stop = one household/door.
+        const byAddress = new Map<string, RouteStop>();
+        for (const p of filteredRef.current) {
+          if (!pointInPolygon(p.lng, p.lat, ring)) continue;
+          const key = (p.address ?? p.external_id).trim().toLowerCase();
+          if (!byAddress.has(key)) {
+            byAddress.set(key, { lng: p.lng, lat: p.lat, address: p.address ?? "Unknown address" });
+          }
+        }
+        const stops = [...byAddress.values()];
+        if (stops.length === 0) {
+          return { stops: 0, error: "No doors match the current filter inside this turf." };
+        }
+        const ordered = optimizeRoute(stops);
+        const distanceMi = routeLengthMi(ordered);
+        const res = await setTurfRoute(turfId, ordered);
+        if (!res.ok) return { stops: 0, error: res.error ?? "Failed to save route" };
+        // Draw immediately, then refresh map + server state.
+        (map.getSource("route-line") as mapboxgl.GeoJSONSource | undefined)?.setData(routeLineFC(ordered));
+        (map.getSource("route-ends") as mapboxgl.GeoJSONSource | undefined)?.setData(routeEndsFC(ordered));
+        await refresh();
+        router.refresh();
+        return { stops: ordered.length, distanceMi };
       },
 
       getFilteredCount: () => filteredRef.current.length,
@@ -355,13 +506,17 @@ export function TurfMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [svOn, svN, svM, supportMin]);
 
-  // ── Effect 3: highlight the selected turf ────────────────────────────────
+  // ── Effect 3: highlight the selected turf + draw its walking route ─────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const apply = () => {
       (map.getSource("selected-turf") as mapboxgl.GeoJSONSource | undefined)
         ?.setData(selectedTurfFeatures(saved, selectedTurfId ?? null));
+      const t = selectedTurfId ? saved.find((x) => x.id === selectedTurfId) : null;
+      const route = t?.route ?? null;
+      (map.getSource("route-line") as mapboxgl.GeoJSONSource | undefined)?.setData(routeLineFC(route));
+      (map.getSource("route-ends") as mapboxgl.GeoJSONSource | undefined)?.setData(routeEndsFC(route));
     };
     if (map.isStyleLoaded() && map.getSource("selected-turf")) apply();
     else map.once("idle", apply);

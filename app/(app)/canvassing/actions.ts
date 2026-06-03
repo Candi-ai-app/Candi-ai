@@ -7,6 +7,9 @@ import { getActiveCampaign, getActiveCampaignId } from "@/lib/campaign";
 
 export type GeoPolygon = { type: "Polygon"; coordinates: number[][][] };
 
+/** One stop on a generated walking route (a door / household). */
+export type RouteStop = { lng: number; lat: number; address: string };
+
 export type SavedTurf = {
   id: string;
   name: string;
@@ -14,6 +17,8 @@ export type SavedTurf = {
   voter_count: number;
   door_count: number;
   boundary: GeoPolygon;
+  /** Optimized walking order of stops, or null if no route generated yet. */
+  route: RouteStop[] | null;
 };
 
 /** A real turf enriched for the canvassing list + detail drawer. */
@@ -25,8 +30,12 @@ export type TurfListItem = {
   doorCount: number;
   /** Resolved assignee display name, or null when unassigned / unresolvable. */
   assignee: string | null;
+  /** Assignee membership id (stable key for grouping by canvasser). */
+  assigneeId: string | null;
   /** Whether the turf has a stored boundary (drawn on the map). */
   hasBoundary: boolean;
+  /** Number of stops in the generated walking route (0 = no route yet). */
+  routeStops: number;
 };
 
 /** Header stats for the canvassing module, all from real campaign data. */
@@ -117,7 +126,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
   const [turfsRes, membersRes, doorsTodayRes] = await Promise.all([
     supabase
       .from("turfs")
-      .select("id, name, status, voter_count, door_count, assignee_id, boundary")
+      .select("id, name, status, voter_count, door_count, assignee_id, boundary, route")
       .eq("campaign_id", campaign.id)
       .order("created_at", { ascending: true }),
     // All campaign org members (canvassers + directors) for stats + assignment.
@@ -143,6 +152,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
     door_count: number | null;
     assignee_id: string | null;
     boundary: unknown;
+    route: unknown;
   };
   const turfRows = (turfsRes.data ?? []) as TurfRow[];
   type MemberRow = { id: string; user_id: string; role: string };
@@ -179,7 +189,9 @@ export async function getCanvassingData(): Promise<CanvassingData> {
     voterCount: t.voter_count ?? 0,
     doorCount: t.door_count ?? 0,
     assignee: t.assignee_id ? nameById.get(t.assignee_id) ?? null : null,
+    assigneeId: t.assignee_id,
     hasBoundary: t.boundary != null,
+    routeStops: Array.isArray(t.route) ? t.route.length : 0,
   }));
 
   const doorsToday = ((doorsTodayRes.data ?? []) as { created_at: string }[]).reduce(
@@ -278,6 +290,27 @@ export async function setTurfStatus(
     .eq("campaign_id", campaignId);
   if (error) {
     console.error("setTurfStatus:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true };
+}
+
+/** Store a generated walking route (ordered stops) on a turf. Pass [] to clear. */
+export async function setTurfRoute(
+  turfId: string,
+  route: RouteStop[]
+): Promise<{ ok: boolean; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("turfs")
+    .update({ route: route.length ? route : null })
+    .eq("id", turfId)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("setTurfRoute:", error.message);
     return { ok: false, error: error.message };
   }
   revalidatePath("/canvassing");
