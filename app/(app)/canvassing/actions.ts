@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getActiveCampaign, getActiveCampaignId } from "@/lib/campaign";
@@ -36,7 +37,14 @@ export type TurfStats = {
   doorsToday: number;
 };
 
-export type CanvassingData = { turfs: TurfListItem[]; stats: TurfStats };
+/** A resolvable workspace member (for turf assignment dropdowns). */
+export type CampaignMember = {
+  id: string;        // memberships.id — this is what assignee_id stores
+  name: string;      // resolved from auth email
+  role: string;
+};
+
+export type CanvassingData = { turfs: TurfListItem[]; stats: TurfStats; members: CampaignMember[] };
 
 /** One plottable voter for the turf map (from the voter_points RPC). */
 export type VoterPoint = {
@@ -95,6 +103,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
   const empty: CanvassingData = {
     turfs: [],
     stats: { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 },
+    members: [],
   };
 
   const campaign = await getActiveCampaign();
@@ -105,18 +114,17 @@ export async function getCanvassingData(): Promise<CanvassingData> {
   const sinceToday = new Date();
   sinceToday.setHours(0, 0, 0, 0);
 
-  const [turfsRes, canvasserRes, doorsTodayRes] = await Promise.all([
+  const [turfsRes, membersRes, doorsTodayRes] = await Promise.all([
     supabase
       .from("turfs")
       .select("id, name, status, voter_count, door_count, assignee_id, boundary")
       .eq("campaign_id", campaign.id)
       .order("created_at", { ascending: true }),
-    // Canvassers in this campaign's org (matches the HQ "Canvassers in field" set).
+    // All campaign org members (canvassers + directors) for stats + assignment.
     supabase
       .from("memberships")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", campaign.org_id)
-      .eq("role", "canvasser"),
+      .select("id, user_id, role")
+      .eq("org_id", campaign.org_id),
     // Door contacts logged today → "doors knocked today" (real, like HQ).
     supabase
       .from("contacts")
@@ -137,28 +145,32 @@ export async function getCanvassingData(): Promise<CanvassingData> {
     boundary: unknown;
   };
   const turfRows = (turfsRes.data ?? []) as TurfRow[];
+  type MemberRow = { id: string; user_id: string; role: string };
+  const memberRows = (membersRes.data ?? []) as MemberRow[];
 
-  // Resolve assignee membership ids → display names via auth emails (admin client,
-  // display-only). Row scoping still comes from RLS on the turf read above.
-  const assigneeIds = [...new Set(turfRows.map((t) => t.assignee_id).filter(Boolean) as string[])];
+  // Resolve all member user_ids → display names via auth emails (admin client,
+  // display-only). Used for both the assignee names on turf cards AND the
+  // assignment dropdown in the drawer.
   const nameById = new Map<string, string | null>();
-  if (assigneeIds.length > 0) {
+  if (memberRows.length > 0) {
     try {
       const admin = createAdminClient();
-      const { data: mems } = await admin
-        .from("memberships")
-        .select("id, user_id")
-        .in("id", assigneeIds);
       await Promise.all(
-        (mems ?? []).map(async (m) => {
-          const { data } = await admin.auth.admin.getUserById(m.user_id as string);
-          nameById.set(m.id as string, emailToName(data?.user?.email ?? ""));
+        memberRows.map(async (m) => {
+          const { data } = await admin.auth.admin.getUserById(m.user_id);
+          nameById.set(m.id, emailToName(data?.user?.email ?? ""));
         })
       );
     } catch {
-      /* email lookup unavailable — assignees fall back to null (Unassigned) */
+      /* email lookup unavailable — names fall back to null */
     }
   }
+
+  const members: CampaignMember[] = memberRows.map((m) => ({
+    id: m.id,
+    name: nameById.get(m.id) ?? "Member",
+    role: m.role,
+  }));
 
   const turfs: TurfListItem[] = turfRows.map((t) => ({
     id: t.id,
@@ -177,10 +189,11 @@ export async function getCanvassingData(): Promise<CanvassingData> {
 
   return {
     turfs,
+    members,
     stats: {
       activeTurfs: turfs.filter((t) => t.status === "active").length,
       totalTurfs: turfs.length,
-      canvassers: canvasserRes.count ?? 0,
+      canvassers: memberRows.filter((m) => m.role === "canvasser").length,
       doorsToday,
     },
   };
@@ -211,9 +224,9 @@ export async function listVoterPoints(): Promise<VoterPoint[]> {
 export async function saveTurf(
   geometry: GeoPolygon,
   counts?: { voterCount?: number; doorCount?: number }
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; error?: string }> {
   const campaignId = await getActiveCampaignId();
-  if (!campaignId) return { ok: false };
+  if (!campaignId) return { ok: false, error: "No active campaign" };
   const supabase = await createClient();
   const { error } = await supabase.rpc("create_turf", {
     p_campaign: campaignId,
@@ -223,7 +236,50 @@ export async function saveTurf(
   });
   if (error) {
     console.error("saveTurf:", error.message);
-    return { ok: false };
+    return { ok: false, error: error.message };
   }
+  revalidatePath("/canvassing");
+  return { ok: true };
+}
+
+/** Update the assignee on a turf (null = unassign). RLS: must own the campaign. */
+export async function assignTurf(
+  turfId: string,
+  memberId: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("turfs")
+    .update({ assignee_id: memberId })
+    .eq("id", turfId)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("assignTurf:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true };
+}
+
+/** Set the status of a turf (queued | active | complete). */
+export async function setTurfStatus(
+  turfId: string,
+  status: "queued" | "active" | "complete"
+): Promise<{ ok: boolean; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("turfs")
+    .update({ status })
+    .eq("id", turfId)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("setTurfStatus:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
   return { ok: true };
 }

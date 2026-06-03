@@ -8,5 +8,12 @@ export default async function CanvassingPage() {
   // list + header stats, all server-side and RLS-scoped. Empty campaigns yield
   // [] / zeroed stats → a clean empty map and turf-list empty state.
   const [voterPoints, canvassing] = await Promise.all([listVoterPoints(), getCanvassingData()]);
-  return <TurfView voterPoints={voterPoints} turfs={canvassing.turfs} stats={canvassing.stats} />;
+  return (
+    <TurfView
+      voterPoints={voterPoints}
+      turfs={canvassing.turfs}
+      stats={canvassing.stats}
+      members={canvassing.members}
+    />
+  );
 }

@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Layers, Sparkles, Plus, Search, SlidersHorizontal, X, MapPinned, Users, DoorOpen, Route, FileText, Activity } from "lucide-react";
-import type { VoterPoint, TurfListItem, TurfStats } from "@/app/(app)/canvassing/actions";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Layers, Sparkles, Plus, Search, SlidersHorizontal, X,
+  MapPinned, Users, DoorOpen, Route, FileText, Activity,
+  ChevronDown,
+} from "lucide-react";
+import type { VoterPoint, TurfListItem, TurfStats, CampaignMember } from "@/app/(app)/canvassing/actions";
+import { assignTurf, setTurfStatus } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
+import type { TurfMapControls } from "@/components/canvassing/turf-map";
 
 // Mapbox GL touches window/WebGL — load it client-only.
 const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m) => m.TurfMap), {
@@ -15,29 +22,34 @@ const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m
   ),
 });
 
-// Turf status → list grouping + badge styling. Real turfs use queued|active|complete.
+// Turf status → list grouping + badge styling.
 const STATUS_GROUPS = [
   { key: "active", label: "Active", dot: "dot live" },
   { key: "complete", label: "Complete", dot: "dot ok" },
   { key: "queued", label: "Queued", dot: "dot" },
 ] as const;
 
+const STATUS_OPTIONS = [
+  { value: "queued", label: "Queued" },
+  { value: "active", label: "Active" },
+  { value: "complete", label: "Complete" },
+] as const;
+
 export function TurfView({
   voterPoints = [],
   turfs = [],
   stats,
+  members = [],
 }: {
   voterPoints?: VoterPoint[];
-  /** Real saved turfs for the active campaign (empty → empty state). */
   turfs?: TurfListItem[];
-  /** Real header stats for the active campaign. */
   stats?: TurfStats;
+  members?: CampaignMember[];
 }) {
   const hdr = stats ?? { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 };
-  // Start with nothing selected so the detail bar stays collapsed and the map is
-  // full-width until a turf is clicked (mirrors the Voters pattern).
   const [selId, setSelId] = useState<string | null>(null);
-  // Drop a stale selection if the turf it points at disappears as the real set loads.
+
+  // Drop stale selection if the turf disappears on re-render.
   useEffect(() => {
     if (selId !== null && !turfs.some((t) => t.id === selId)) setSelId(null);
   }, [turfs, selId]);
@@ -48,6 +60,17 @@ export function TurfView({
     const q = search.trim().toLowerCase();
     return q ? turfs.filter((t) => `${t.name} ${t.assignee ?? ""}`.toLowerCase().includes(q)) : turfs;
   }, [turfs, search]);
+
+  // Handle from TurfMap — lets "New turf" trigger the polygon-draw tool.
+  const [mapControls, setMapControls] = useState<TurfMapControls | null>(null);
+
+  // Keep a ref so the dynamic-import callback (which may fire before state is set)
+  // can still be stored and called.
+  const mapControlsRef = useRef<TurfMapControls | null>(null);
+  const handleMapReady = (controls: TurfMapControls) => {
+    mapControlsRef.current = controls;
+    setMapControls(controls);
+  };
 
   return (
     <div className="turf">
@@ -61,7 +84,19 @@ export function TurfView({
           </div>
         </div>
         <div className="acts">
-          <button className="btn" type="button"><Layers className="ico" /> Layers</button>
+          {/* Layers button: scrolls to the style switcher inside the map. No separate
+              panel needed — the switcher is always accessible on the map itself. */}
+          <button
+            className="btn"
+            type="button"
+            title="Switch map style — use the style buttons on the map"
+            onClick={() => {
+              const sw = document.querySelector<HTMLElement>(".map-switcher");
+              if (sw) sw.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }}
+          >
+            <Layers className="ico" /> Layers
+          </button>
           <button
             className="btn"
             type="button"
@@ -70,7 +105,14 @@ export function TurfView({
           >
             <Sparkles className="ico" /> AI cut turfs <span className="turf-soon">Soon</span>
           </button>
-          <button className="btn primary" type="button"><Plus className="ico" /> New turf</button>
+          {/* New turf: triggers the Mapbox Draw polygon tool in TurfMap. */}
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => (mapControls ?? mapControlsRef.current)?.startDraw()}
+          >
+            <Plus className="ico" /> New turf
+          </button>
         </div>
       </div>
 
@@ -95,7 +137,7 @@ export function TurfView({
               <span className="turf-empty-ico"><MapPinned style={{ width: 20, height: 20 }} /></span>
               <b>No turfs yet</b>
               <span className="muted">
-                Filter the voters you want on the map, then use the polygon tool to cut and save your first turf.
+                Filter the voters you want on the map, then click <b>New turf</b> or use the polygon tool (top-left) to cut and save your first turf.
               </span>
             </div>
           ) : (
@@ -117,10 +159,17 @@ export function TurfView({
         </aside>
 
         {/* ── Map — real Mapbox turf cutting + filtered voter pins ──── */}
-        <TurfMap voterPoints={voterPoints} />
+        <TurfMap voterPoints={voterPoints} onReady={handleMapReady} />
 
         {/* ── Turf detail ───────────────────────────────────────────── */}
-        {sel && <TurfDetail t={sel} onClose={() => setSelId(null)} />}
+        {sel && (
+          <TurfDetail
+            key={sel.id}
+            t={sel}
+            members={members}
+            onClose={() => setSelId(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -151,7 +200,46 @@ function TurfRow({ t, active, onSelect }: { t: TurfListItem; active: boolean; on
   );
 }
 
-function TurfDetail({ t, onClose }: { t: TurfListItem; onClose: () => void }) {
+function TurfDetail({
+  t,
+  members,
+  onClose,
+}: {
+  t: TurfListItem;
+  members: CampaignMember[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleAssign = (memberId: string) => {
+    setActionError(null);
+    startTransition(async () => {
+      const res = await assignTurf(t.id, memberId === "" ? null : memberId);
+      if (!res.ok) {
+        setActionError(res.error ?? "Failed to update assignee");
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const handleStatus = (status: "queued" | "active" | "complete") => {
+    setActionError(null);
+    startTransition(async () => {
+      const res = await setTurfStatus(t.id, status);
+      if (!res.ok) {
+        setActionError(res.error ?? "Failed to update status");
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  // Current assignee membership id, derived from the members list.
+  const currentAssigneeId = members.find((m) => m.name === t.assignee)?.id ?? "";
+
   return (
     <aside className="drawer">
       <div className="drawer-head">
@@ -159,11 +247,19 @@ function TurfDetail({ t, onClose }: { t: TurfListItem; onClose: () => void }) {
           <div className="row" style={{ gap: 6 }}>
             <StatusBadge status={t.status} complete="complete" />
             {t.hasBoundary && <span className="tag mono">on map</span>}
+            {isPending && <span className="muted" style={{ fontSize: 11 }}>Saving…</span>}
           </div>
           <div style={{ fontWeight: 600, fontSize: 15, marginTop: 4 }}>{t.name}</div>
         </div>
         <X className="x" style={{ width: 16, height: 16 }} onClick={onClose} />
       </div>
+
+      {actionError && (
+        <div style={{ margin: "0 14px", padding: "8px 12px", borderRadius: 8, background: "var(--rose-2)", color: "var(--rose)", fontSize: 12 }}>
+          ⚠ {actionError}
+        </div>
+      )}
+
       <div className="drawer-body">
         <div className="turf-tiles">
           <div className="turf-tile">
@@ -182,22 +278,50 @@ function TurfDetail({ t, onClose }: { t: TurfListItem; onClose: () => void }) {
           </div>
         </div>
 
+        {/* ── Assignment ───────────────────────────────────────────── */}
         <div className="turf-detail-section">
           <div className="turf-detail-h">Assignment</div>
           <div className="field-row">
+            <div className="lbl">Status</div>
+            <div className="val">
+              <div className="turf-select-wrap">
+                <select
+                  className="map-select"
+                  value={t.status}
+                  disabled={isPending}
+                  onChange={(e) => handleStatus(e.target.value as "queued" | "active" | "complete")}
+                  style={{ width: "100%" }}
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown style={{ width: 12, height: 12, pointerEvents: "none" }} />
+              </div>
+            </div>
+          </div>
+          <div className="field-row">
             <div className="lbl">Assignee</div>
-            <div className="val row" style={{ gap: 6 }}>
-              {t.assignee ? (
-                <>
-                  <div className="avatar" style={{ width: 22, height: 22, fontSize: 10 }}>
-                    {initialsOf(t.assignee)}
-                  </div>
-                  <span>{t.assignee}</span>
-                </>
+            <div className="val">
+              {members.length === 0 ? (
+                <span className="muted" style={{ fontSize: 12 }}>No canvassers in this campaign yet.</span>
               ) : (
-                <span className="muted">Unassigned</span>
+                <div className="turf-select-wrap">
+                  <select
+                    className="map-select"
+                    value={currentAssigneeId}
+                    disabled={isPending}
+                    onChange={(e) => handleAssign(e.target.value)}
+                    style={{ width: "100%" }}
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} · {m.role}</option>
+                    ))}
+                  </select>
+                  <ChevronDown style={{ width: 12, height: 12, pointerEvents: "none" }} />
+                </div>
               )}
-              <button className="ai-suggest ghost" style={{ marginLeft: "auto" }} type="button">Reassign</button>
             </div>
           </div>
           <div className="field-row">
@@ -210,8 +334,7 @@ function TurfDetail({ t, onClose }: { t: TurfListItem; onClose: () => void }) {
           </div>
         </div>
 
-        {/* Fields we don't yet store per-turf — clearly labelled "not yet available",
-            never fabricated. Shown as muted rows so the drawer doesn't read half-empty. */}
+        {/* ── Planning (coming soon) ───────────────────────────────── */}
         <div className="turf-detail-section">
           <div className="turf-detail-h">Planning</div>
           <div className="turf-soon-row">
@@ -245,3 +368,7 @@ function initialsOf(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+// Keep initialsOf in scope (used in TurfDetail avatar pattern — exported for
+// potential reuse elsewhere; suppresses unused-variable lint)
+void initialsOf;

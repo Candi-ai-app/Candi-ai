@@ -1464,6 +1464,13 @@ svg.ico { display: block; }
   background: color-mix(in oklch, var(--accent) 25%, transparent);
 }
 .map-legend-foot { font-size: 11.5px; margin-top: 1px; }
+/* Save-error banner inside the legend. */
+.map-legend-error { font-size: 11.5px; color: var(--rose); background: var(--rose-2,#fff1f2); border-radius: 7px; padding: 6px 10px; margin-bottom: 4px; line-height: 1.4; }
+/* "No vote history" warning inside the super-voter filter. */
+.map-filter-warn { font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 5px 8px; line-height: 1.4; margin-top: 2px; }
+/* Wrapper for <select> + chevron overlay in the drawer. */
+.turf-select-wrap { position: relative; display: flex; align-items: center; }
+.turf-select-wrap svg { position: absolute; right: 8px; color: var(--muted); pointer-events: none; }
 /* Doors-vs-people segmented toggle. */
 .map-seg {
   display: inline-flex; gap: 2px; width: fit-content; margin-top: 2px;

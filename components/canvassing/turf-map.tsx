@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import mapboxgl from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -76,7 +77,19 @@ function pointsBounds(points: VoterPoint[]): [number, number, number, number] | 
   return [w, s, e, n];
 }
 
-export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
+/** Controls exposed to the parent so "New turf" can trigger the draw tool. */
+export type TurfMapControls = { startDraw: () => void };
+
+export function TurfMap({
+  voterPoints = [],
+  onReady,
+}: {
+  voterPoints?: VoterPoint[];
+  /** Called once the map + draw control are initialised; gives the parent a handle
+   *  to trigger polygon-draw mode (wires the "New turf" button in TurfView). */
+  onReady?: (controls: TurfMapControls) => void;
+}) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
@@ -85,6 +98,7 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
   const [saved, setSaved] = useState<SavedTurf[]>([]);
   const [styleUrl, setStyleUrl] = useState<string>(STYLES[0].url);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ── Filter bar state — "the filtered list drives the turf" ──────────────────
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
@@ -97,7 +111,7 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
   const [counts, setCounts] = useState<{ people: number; doors: number } | null>(null);
   const [countMode, setCountMode] = useState<"people" | "doors">("people");
 
-  // Filtered points, derived during render (no effect) per react-best-practices.
+  // Filtered points, derived during render (no effect needed).
   const filtered = useMemo(
     () =>
       voterPoints.filter((p) => {
@@ -111,7 +125,7 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
   );
 
   // Latest filtered set for the (once-registered) draw.create handler — avoids a
-  // stale closure so counts always reflect the CURRENT filter (advanced-use-latest).
+  // stale closure so counts always reflect the CURRENT filter.
   const filteredRef = useRef(filtered);
   filteredRef.current = filtered;
 
@@ -123,7 +137,7 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
   };
 
   // (Re-)add saved-turf + voter-point sources/layers. Called on first load and on
-  // every style.load (a style swap wipes user layers), mirroring the saved-turf flow.
+  // every style.load (a style swap wipes user layers).
   const addLayers = (map: mapboxgl.Map) => {
     if (!map.getSource("saved-turfs")) {
       map.addSource("saved-turfs", { type: "geojson", data: EMPTY_FC });
@@ -158,7 +172,7 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: STYLES[0].url,
-      center: [-80.2064, 26.1645], // fallback only — fitBounds() moves to real voters on load
+      center: [-80.2064, 26.1645], // fallback — fitBounds() moves to real voters
       zoom: 11,
       attributionControl: false,
     });
@@ -169,16 +183,19 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
     drawRef.current = draw;
     map.addControl(draw as unknown as mapboxgl.IControl, "top-left");
 
+    // Expose startDraw to the parent (wires the "New turf" button).
+    onReady?.({ startDraw: () => draw.changeMode("draw_polygon") });
+
     map.on("load", () => addLayers(map));
 
-    // Drawn turf → count filtered voters inside (client-side ray-cast), persist
-    // those exact doors/people, then drop the scratch shape (it becomes a saved layer).
+    // Drawn turf → count filtered voters inside (client-side ray-cast), persist,
+    // then drop the scratch shape only on success.
     map.on("draw.create", async (e: { features: Array<{ id?: string | number; geometry: { type: string; coordinates: number[][][] } }> }) => {
       const f = e.features?.[0];
       if (!f || f.geometry?.type !== "Polygon") return;
       const ring = f.geometry.coordinates[0] ?? [];
 
-      // Single pass: people = points inside; doors = distinct address inside.
+      // Single pass: people = points inside; doors = distinct addresses inside.
       const addresses = new Set<string>();
       let people = 0;
       for (const p of filteredRef.current) {
@@ -188,12 +205,23 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
       }
       const doors = addresses.size;
       setCounts({ people, doors });
+      setSaveError(null);
 
       setSaving(true);
-      await saveTurf(f.geometry as GeoPolygon, { voterCount: people, doorCount: doors });
+      const result = await saveTurf(f.geometry as GeoPolygon, { voterCount: people, doorCount: doors });
+      setSaving(false);
+
+      if (!result.ok) {
+        // Keep the drawn shape so the user can retry — don't silently lose their work.
+        setSaveError(result.error ?? "Save failed — turf not saved. Check your connection and try again.");
+        return;
+      }
+
+      // Success: remove the scratch polygon (it's now a saved layer), refresh the
+      // map layer, and trigger a server component re-render for the sidebar + stats.
       if (f.id != null) draw.delete(String(f.id));
       await refresh();
-      setSaving(false);
+      router.refresh();
     });
 
     return () => {
@@ -201,26 +229,45 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
       mapRef.current = null;
       didFitRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the circle layer in sync with the filter, and fit to the points: once on
-  // first load, then again whenever a "big" filter (super-voter / support floor)
-  // changes the visible set materially. Guard empty so we never fitBounds([]).
+  // ── Effect 1: update the voter-point circle layer on ANY filter change ──────
+  // Runs on party toggles too. Only fits bounds on the very first load.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const apply = () => {
       (map.getSource("voter-points") as mapboxgl.GeoJSONSource | undefined)?.setData(pointFeatures(filtered));
-      const b = pointsBounds(filtered);
-      if (b) {
-        map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 64, maxZoom: 15, duration: didFitRef.current ? 600 : 0 });
-        didFitRef.current = true;
+      // Initial fit: once we have data and the map is ready, snap to the points.
+      if (!didFitRef.current) {
+        const b = pointsBounds(filtered);
+        if (b) {
+          map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 64, maxZoom: 15, duration: 0 });
+          didFitRef.current = true;
+        }
       }
     };
     if (map.isStyleLoaded() && map.getSource("voter-points")) apply();
     else map.once("idle", apply);
-    // Refit only on load + on the "big" filters (not on every party toggle), per spec.
-  }, [filtered, svOn, svN, svM, supportMin]);
+  }, [filtered]);
+
+  // ── Effect 2: refit bounds only on "big" filter changes (not party toggles) ──
+  // Intentionally excludes `filtered` from deps; it only refits when the user
+  // changes the super-voter threshold or support floor — not on D/R/I toggles.
+  useEffect(() => {
+    const map = mapRef.current;
+    // Skip on initial load (handled by Effect 1 above).
+    if (!map || !didFitRef.current) return;
+    const b = pointsBounds(filteredRef.current);
+    if (!b) return;
+    const apply = () => {
+      map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 64, maxZoom: 15, duration: 600 });
+    };
+    if (map.isStyleLoaded() && map.getSource("voter-points")) apply();
+    else map.once("idle", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [svOn, svN, svM, supportMin]);
 
   const switchStyle = (url: string) => {
     const map = mapRef.current;
@@ -280,6 +327,11 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
           <input type="checkbox" checked={svOn} onChange={(e) => setSvOn(e.target.checked)} />
           <span>Super voters only</span>
         </label>
+        {svOn && filtered.length === 0 && voterPoints.length > 0 && (
+          <div className="map-filter-warn">
+            No vote history on file yet — request the VAN export to unlock this filter.
+          </div>
+        )}
         <div className="map-filter-sv" style={{ opacity: svOn ? 1 : 0.45, pointerEvents: svOn ? "auto" : "none" }}>
           <span className="muted">≥</span>
           <Stepper value={svN} min={1} max={svM} onChange={setN} />
@@ -317,9 +369,14 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
         ))}
       </div>
 
-      {/* ── Legend: doors-vs-people for the last drawn turf + status ────────── */}
+      {/* ── Legend: doors-vs-people + save status ───────────────────────────── */}
       <div className="map-legend">
-        {counts ? (
+        {saveError && (
+          <div className="map-legend-error" role="alert">
+            ⚠ {saveError}
+          </div>
+        )}
+        {counts && !saveError ? (
           <>
             <div className="map-legend-count">
               <span className="serif map-legend-n">
@@ -341,12 +398,12 @@ export function TurfMap({ voterPoints = [] }: { voterPoints?: VoterPoint[] }) {
               ))}
             </div>
           </>
-        ) : (
+        ) : !saveError ? (
           <div className="map-legend-hint">
             <span className="map-legend-swatch" />
             Cut a turf — polygon tool, top-left
           </div>
-        )}
+        ) : null}
         <div className="map-legend-foot muted">
           {saving ? "Saving…" : `${saved.length} turf${saved.length === 1 ? "" : "s"} saved · ${filtered.length} doors shown`}
         </div>
