@@ -8,7 +8,7 @@ import {
   ChevronDown, Trash2, Pencil, Check, Map as MapIcon,
 } from "lucide-react";
 import type { VoterPoint, TurfListItem, TurfStats, CampaignMember } from "@/app/(app)/canvassing/actions";
-import { assignTurf, setTurfStatus, deleteTurf, renameTurf } from "@/app/(app)/canvassing/actions";
+import { assignTurf, setTurfStatus, deleteTurf, deleteTurfs, renameTurf } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
 import type { TurfMapControls } from "@/components/canvassing/turf-map";
 import { CanvassersView } from "@/components/canvassing/canvassers-view";
@@ -49,12 +49,44 @@ export function TurfView({
 }) {
   const hdr = stats ?? { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 };
 
+  const router = useRouter();
   const [tab, setTab] = useState<"map" | "canvassers">("map");
   const [selId, setSelId] = useState<string | null>(null);
   useEffect(() => {
     if (selId !== null && !turfs.some((t) => t.id === selId)) setSelId(null);
   }, [turfs, selId]);
   const sel = useMemo(() => turfs.find((t) => t.id === selId) ?? null, [turfs, selId]);
+
+  // ── Multi-select (checkboxes) + bulk delete ────────────────────────────────
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
+  const toggleCheck = (id: string) =>
+    setChecked((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  // Drop checked ids that no longer exist (after a delete / data refresh).
+  useEffect(() => {
+    setChecked((prev) => {
+      const next = new Set([...prev].filter((id) => turfs.some((t) => t.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [turfs]);
+  const clearChecked = () => { setChecked(new Set()); setBulkConfirm(false); setBulkErr(null); };
+  const bulkDelete = async () => {
+    setBulkDeleting(true);
+    setBulkErr(null);
+    const ids = [...checked];
+    const res = await deleteTurfs(ids);
+    setBulkDeleting(false);
+    if (!res.ok) { setBulkErr(res.error ?? "Bulk delete failed"); return; }
+    if (selId && ids.includes(selId)) setSelId(null);
+    clearChecked();
+    router.refresh();
+  };
 
   const [search, setSearch] = useState("");
   const visible = useMemo(() => {
@@ -120,6 +152,7 @@ export function TurfView({
             </button>
 
             <button className={"btn" + (splitOpen ? " primary" : "")} type="button"
+              title="Divide the filtered voters into N roughly equal turfs to share across canvassers"
               onClick={() => { setSplitOpen((v) => !v); setSplitMsg(null); }}>
               <Scissors className="ico" /> Split equally
             </button>
@@ -157,7 +190,9 @@ export function TurfView({
               </div>
             )}
 
-            <button className="btn primary" type="button" onClick={() => ctrl()?.startDraw()}>
+            <button className="btn primary" type="button"
+              title="Draw a new turf — click points on the map to outline an area"
+              onClick={() => ctrl()?.startDraw()}>
               <Plus className="ico" /> New turf
             </button>
           </div>
@@ -181,13 +216,38 @@ export function TurfView({
         <div className={"turf-body" + (sel ? " detail-open" : "")}>
           {/* Turf list */}
           <aside className="turf-list">
+            {checked.size > 0 && (
+              <div className="turf-bulkbar">
+                <span className="turf-bulkbar-n"><b>{checked.size}</b> selected</span>
+                {bulkConfirm ? (
+                  <>
+                    <button type="button" className="turf-bulk-del" disabled={bulkDeleting} onClick={bulkDelete}>
+                      {bulkDeleting ? "Deleting…" : `Delete ${checked.size}`}
+                    </button>
+                    <button type="button" className="turf-bulk-clear" disabled={bulkDeleting} onClick={() => setBulkConfirm(false)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="turf-bulk-del" title="Delete selected turfs" onClick={() => setBulkConfirm(true)}>
+                      <Trash2 style={{ width: 12, height: 12 }} /> Delete
+                    </button>
+                    <button type="button" className="turf-bulk-clear" title="Clear selection" onClick={clearChecked}>
+                      Clear
+                    </button>
+                  </>
+                )}
+                {bulkErr && <span className="turf-bulk-err">⚠ {bulkErr}</span>}
+              </div>
+            )}
             <div className="vot-toolbar" style={{ padding: "10px 14px" }}>
               <div className="row" style={{ gap: 6, flex: 1 }}>
                 <Search style={{ width: 13, height: 13, color: "var(--muted)" }} />
                 <input className="turf-filter-input" placeholder="Filter turfs"
                   value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <button className="btn ghost" type="button"><SlidersHorizontal style={{ width: 13, height: 13 }} /></button>
+              <button className="btn ghost" type="button" title="Filter options"><SlidersHorizontal style={{ width: 13, height: 13 }} /></button>
             </div>
 
             {turfs.length === 0 ? (
@@ -211,6 +271,8 @@ export function TurfView({
                     </div>
                     {rows.map((t) => (
                       <TurfRow key={t.id} t={t} active={t.id === selId}
+                        checked={checked.has(t.id)}
+                        onToggleCheck={() => toggleCheck(t.id)}
                         onSelect={() => setSelId(t.id === selId ? null : t.id)} />
                     ))}
                   </div>
@@ -246,10 +308,29 @@ function StatusBadge({ status, complete = "done" }: { status: string; complete?:
   return <span className="tag">queued</span>;
 }
 
-function TurfRow({ t, active, onSelect }: { t: TurfListItem; active: boolean; onSelect: () => void }) {
+function TurfRow({
+  t, active, checked, onSelect, onToggleCheck,
+}: {
+  t: TurfListItem; active: boolean; checked: boolean; onSelect: () => void; onToggleCheck: () => void;
+}) {
   return (
-    <button className={"turf-card" + (active ? " active" : "")} type="button" onClick={onSelect}>
+    <div
+      className={"turf-card" + (active ? " active" : "") + (checked ? " checked" : "")}
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSelect(); } }}
+    >
       <div className="turf-card-top">
+        <input
+          type="checkbox"
+          className="turf-card-check"
+          checked={checked}
+          aria-label={`Select turf ${t.name}`}
+          title="Select turf"
+          onClick={(e) => e.stopPropagation()}
+          onChange={onToggleCheck}
+        />
         <span className="turf-card-name">{t.name}</span>
         <StatusBadge status={t.status} />
       </div>
@@ -264,7 +345,7 @@ function TurfRow({ t, active, onSelect }: { t: TurfListItem; active: boolean; on
           {t.hasBoundary && <span className="tag mono turf-card-maptag"><MapPinned className="turf-mi" /> map</span>}
         </span>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -364,6 +445,7 @@ function TurfDetail({
                 }}
                 onBlur={commitRename} disabled={isPending} />
               <button type="button" className="btn ghost" style={{ padding: "3px 6px" }}
+                title="Save name" aria-label="Save name"
                 onMouseDown={(e) => { e.preventDefault(); commitRename(); }}>
                 <Check style={{ width: 13, height: 13 }} />
               </button>
@@ -380,7 +462,9 @@ function TurfDetail({
             </div>
           )}
         </div>
-        <X className="x" style={{ width: 16, height: 16, flexShrink: 0 }} onClick={onClose} />
+        <button type="button" className="x-btn" title="Close" aria-label="Close turf details" onClick={onClose}>
+          <X style={{ width: 16, height: 16, flexShrink: 0 }} />
+        </button>
       </div>
 
       {actionError && (
@@ -462,6 +546,7 @@ function TurfDetail({
             </div>
           </div>
           <button type="button" className="btn" style={{ width: "100%", gap: 6, marginTop: 4 }}
+            title="Optimize the walking order through this turf's doors (nearest-neighbor route)"
             disabled={routing || !t.hasBoundary} onClick={runRoute}>
             <Route style={{ width: 13, height: 13 }} />
             {routing ? "Optimizing…" : t.routeStops > 0 ? "Regenerate route" : "Generate route"}

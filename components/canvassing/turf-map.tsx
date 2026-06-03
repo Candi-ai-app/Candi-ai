@@ -365,7 +365,9 @@ export function TurfMap({
     mapRef.current = map;
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-left");
 
-    const draw = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: true } });
+    // polygon tool only — turf deletion is selection-driven (drawer + multi-select),
+    // not the Draw trash control (which only removes an in-progress scratch shape).
+    const draw = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: false } });
     drawRef.current = draw;
     map.addControl(draw as unknown as mapboxgl.IControl, "top-left");
 
@@ -553,18 +555,24 @@ export function TurfMap({
           <span className="map-filter-count mono">{filtered.length}/{voterPoints.length}</span>
         </div>
         <div className="map-party-row">
-          {(["D", "R", "I"] as Party[]).map((k) => (
-            <button key={k} type="button" className="map-party-btn" aria-pressed={party[k]}
-              onClick={() => togglePartyKey(k)}
-              style={{
-                border: `1px solid ${party[k] ? PARTY_COLOR[k] : "var(--border)"}`,
-                background: party[k] ? PARTY_COLOR[k] : "transparent",
-                color: party[k] ? "#fff" : "var(--ink-2)",
-              }}
-            >{k}</button>
-          ))}
+          {(["D", "R", "I"] as Party[]).map((k) => {
+            const partyLabel = k === "D" ? "Democrats" : k === "R" ? "Republicans" : "Independents";
+            return (
+              <button key={k} type="button" className="map-party-btn" aria-pressed={party[k]}
+                title={`${party[k] ? "Hide" : "Show"} ${partyLabel}`}
+                aria-label={`Toggle ${partyLabel}`}
+                onClick={() => togglePartyKey(k)}
+                style={{
+                  border: `1px solid ${party[k] ? PARTY_COLOR[k] : "var(--border)"}`,
+                  background: party[k] ? PARTY_COLOR[k] : "transparent",
+                  color: party[k] ? "#fff" : "var(--ink-2)",
+                }}
+              >{k}</button>
+            );
+          })}
         </div>
-        <label className="map-filter-check">
+        <label className="map-filter-check"
+          title="Super voters: people who turned out in at least N of the last M elections — your highest-propensity doors.">
           <input type="checkbox" checked={svOn} onChange={(e) => setSvOn(e.target.checked)} />
           <span>Super voters only</span>
         </label>
@@ -614,6 +622,7 @@ export function TurfMap({
                 <button key={m} type="button"
                   className={"map-seg-btn" + (countMode === m ? " active" : "")}
                   aria-pressed={countMode === m} onClick={() => setCountMode(m)}
+                  title={m === "doors" ? "Doors = unique households (one stop per address)" : "People = individual voters inside the turf"}
                 >{m === "doors" ? `${counts.doors} doors` : `${counts.people} people`}</button>
               ))}
             </div>

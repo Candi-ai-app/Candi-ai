@@ -360,3 +360,24 @@ export async function deleteTurf(
   revalidatePath("/canvassing");
   return { ok: true };
 }
+
+/** Bulk-delete turfs (multi-select). Campaign-scoped; one round trip. */
+export async function deleteTurfs(
+  ids: string[]
+): Promise<{ ok: boolean; deleted: number; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, deleted: 0, error: "No active campaign" };
+  if (ids.length === 0) return { ok: true, deleted: 0 };
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("turfs")
+    .delete({ count: "exact" })
+    .in("id", ids)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("deleteTurfs:", error.message);
+    return { ok: false, deleted: 0, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true, deleted: count ?? ids.length };
+}
