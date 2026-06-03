@@ -1425,9 +1425,12 @@ svg.ico { display: block; }
 
 .map-wrap {
   position: relative;
+  height: 100%;         /* fill the grid cell — Mapbox canvas is position:absolute;inset:0 */
+  min-height: 0;
   background: var(--surface-2);
   overflow: hidden;
 }
+.map-filter-hidden { display: none !important; }
 .map-svg { width: 100%; height: 100%; display: block; }
 .map-controls {
   position: absolute; left: 14px; top: 14px;

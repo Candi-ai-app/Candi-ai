@@ -145,8 +145,8 @@ export function TurfView({
         {tab === "map" && (
           <div className="acts" style={{ flexWrap: "wrap", gap: 6, position: "relative" }}>
             <button className="btn" type="button"
-              title="Switch map style — use the style buttons on the map"
-              onClick={() => document.querySelector<HTMLElement>(".map-switcher")?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
+              title="Show / hide the voter filter panel (party, super-voter, support)"
+              onClick={() => ctrl()?.toggleFilter()}
             >
               <Layers className="ico" /> Layers
             </button>

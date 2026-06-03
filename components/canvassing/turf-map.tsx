@@ -230,6 +230,8 @@ export type TurfMapControls = {
   generateRoute: (turfId: string) => Promise<{ stops: number; distanceMi?: number; error?: string }>;
   /** Current count of filtered voters (for the split panel label). */
   getFilteredCount: () => number;
+  /** Toggle the "Filter doors" overlay panel on/off. */
+  toggleFilter: () => void;
 };
 
 export function TurfMap({
@@ -255,6 +257,7 @@ export function TurfMap({
   const [styleUrl, setStyleUrl] = useState<string>(STYLES[0].url);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [filterVisible, setFilterVisible] = useState(true);
 
   // Filter state
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
@@ -465,6 +468,7 @@ export function TurfMap({
       },
 
       getFilteredCount: () => filteredRef.current.length,
+      toggleFilter: () => setFilterVisible((v) => !v),
     });
 
     return () => {
@@ -548,8 +552,8 @@ export function TurfMap({
     <div className="map-wrap">
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
-      {/* Filter bar */}
-      <div className="map-overlay map-filter">
+      {/* Filter bar — toggled by the Layers button in the header */}
+      <div className={"map-overlay map-filter" + (filterVisible ? "" : " map-filter-hidden")}>
         <div className="map-filter-head">
           <span className="map-overlay-title">Filter doors</span>
           <span className="map-filter-count mono">{filtered.length}/{voterPoints.length}</span>
