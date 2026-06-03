@@ -284,6 +284,29 @@ export async function setTurfStatus(
   return { ok: true };
 }
 
+/** Rename a turf. Name is trimmed; empty string is rejected. */
+export async function renameTurf(
+  turfId: string,
+  name: string
+): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name cannot be empty" };
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("turfs")
+    .update({ name: trimmed })
+    .eq("id", turfId)
+    .eq("campaign_id", campaignId);
+  if (error) {
+    console.error("renameTurf:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true };
+}
+
 /** Permanently delete a turf. Scoped to the active campaign. The saved-turfs
  *  layer on the map refreshes via router.refresh() after the action resolves. */
 export async function deleteTurf(

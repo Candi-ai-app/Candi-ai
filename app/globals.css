@@ -1471,6 +1471,14 @@ svg.ico { display: block; }
 /* Wrapper for <select> + chevron overlay in the drawer. */
 .turf-select-wrap { position: relative; display: flex; align-items: center; }
 .turf-select-wrap svg { position: absolute; right: 8px; color: var(--muted); pointer-events: none; }
+/* AI cut turfs floating panel */
+.ai-cut-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 280px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; box-shadow: 0 8px 28px -8px rgba(20,24,31,0.22); }
+/* Inline rename input in drawer header */
+.turf-rename-input { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; padding: 3px 8px;
+  border: 1px solid var(--accent-deep); border-radius: 7px; background: var(--surface);
+  color: var(--ink); outline: none; }
 /* Doors-vs-people segmented toggle. */
 .map-seg {
   display: inline-flex; gap: 2px; width: fit-content; margin-top: 2px;

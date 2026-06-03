@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   Layers, Sparkles, Plus, Search, SlidersHorizontal, X,
   MapPinned, Users, DoorOpen, Route, FileText, Activity,
-  ChevronDown, Trash2,
+  ChevronDown, Trash2, Pencil, Check,
 } from "lucide-react";
 import type { VoterPoint, TurfListItem, TurfStats, CampaignMember } from "@/app/(app)/canvassing/actions";
-import { assignTurf, setTurfStatus, deleteTurf } from "@/app/(app)/canvassing/actions";
+import { assignTurf, setTurfStatus, deleteTurf, renameTurf } from "@/app/(app)/canvassing/actions";
 import dynamic from "next/dynamic";
 import type { TurfMapControls } from "@/components/canvassing/turf-map";
 
-// Mapbox GL touches window/WebGL — load it client-only.
 const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m) => m.TurfMap), {
   ssr: false,
   loading: () => (
@@ -22,16 +21,15 @@ const TurfMap = dynamic(() => import("@/components/canvassing/turf-map").then((m
   ),
 });
 
-// Turf status → list grouping + badge styling.
 const STATUS_GROUPS = [
-  { key: "active", label: "Active", dot: "dot live" },
-  { key: "complete", label: "Complete", dot: "dot ok" },
-  { key: "queued", label: "Queued", dot: "dot" },
+  { key: "active",   label: "Active",   dot: "dot live" },
+  { key: "complete", label: "Complete", dot: "dot ok"   },
+  { key: "queued",   label: "Queued",   dot: "dot"      },
 ] as const;
 
 const STATUS_OPTIONS = [
-  { value: "queued", label: "Queued" },
-  { value: "active", label: "Active" },
+  { value: "queued",   label: "Queued"   },
+  { value: "active",   label: "Active"   },
   { value: "complete", label: "Complete" },
 ] as const;
 
@@ -47,9 +45,8 @@ export function TurfView({
   members?: CampaignMember[];
 }) {
   const hdr = stats ?? { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 };
-  const [selId, setSelId] = useState<string | null>(null);
 
-  // Drop stale selection if the turf disappears on re-render.
+  const [selId, setSelId] = useState<string | null>(null);
   useEffect(() => {
     if (selId !== null && !turfs.some((t) => t.id === selId)) setSelId(null);
   }, [turfs, selId]);
@@ -61,16 +58,37 @@ export function TurfView({
     return q ? turfs.filter((t) => `${t.name} ${t.assignee ?? ""}`.toLowerCase().includes(q)) : turfs;
   }, [turfs, search]);
 
-  // Handle from TurfMap — lets "New turf" trigger the polygon-draw tool.
+  // Map controls (startDraw, autoCut, getFilteredCount) exposed via onReady
   const [mapControls, setMapControls] = useState<TurfMapControls | null>(null);
-
-  // Keep a ref so the dynamic-import callback (which may fire before state is set)
-  // can still be stored and called.
   const mapControlsRef = useRef<TurfMapControls | null>(null);
   const handleMapReady = (controls: TurfMapControls) => {
     mapControlsRef.current = controls;
     setMapControls(controls);
   };
+
+  // AI cut panel
+  const [aiCutOpen, setAiCutOpen] = useState(false);
+  const [aiCutN, setAiCutN] = useState(4);
+  const [aiCutting, setAiCutting] = useState(false);
+  const [aiCutMsg, setAiCutMsg] = useState<string | null>(null);
+
+  const handleAiCut = async () => {
+    const ctrl = mapControls ?? mapControlsRef.current;
+    if (!ctrl) return;
+    setAiCutting(true);
+    setAiCutMsg(null);
+    const res = await ctrl.autoCut(aiCutN);
+    setAiCutting(false);
+    if (res.error) {
+      setAiCutMsg(`⚠ ${res.error}`);
+    } else {
+      setAiCutMsg(`✓ ${res.saved} turf${res.saved === 1 ? "" : "s"} created`);
+      setTimeout(() => { setAiCutOpen(false); setAiCutMsg(null); }, 1400);
+    }
+  };
+
+  const ctrl = mapControls ?? mapControlsRef.current;
+  const filteredCount = ctrl?.getFilteredCount() ?? voterPoints.length;
 
   return (
     <div className="turf">
@@ -83,32 +101,62 @@ export function TurfView({
             <span className="mono">{hdr.doorsToday.toLocaleString()}</span> doors knocked today
           </div>
         </div>
-        <div className="acts">
-          {/* Layers button: scrolls to the style switcher inside the map. No separate
-              panel needed — the switcher is always accessible on the map itself. */}
-          <button
-            className="btn"
-            type="button"
+        <div className="acts" style={{ flexWrap: "wrap", gap: 6, position: "relative" }}>
+          <button className="btn" type="button"
             title="Switch map style — use the style buttons on the map"
-            onClick={() => {
-              const sw = document.querySelector<HTMLElement>(".map-switcher");
-              if (sw) sw.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }}
+            onClick={() => document.querySelector<HTMLElement>(".map-switcher")?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
           >
             <Layers className="ico" /> Layers
           </button>
+
+          {/* AI cut turfs — opens inline panel */}
           <button
-            className="btn"
+            className={"btn" + (aiCutOpen ? " primary" : "")}
             type="button"
-            disabled
-            title="Soon — Candi will auto-cut balanced turfs from your filtered voters"
+            onClick={() => { setAiCutOpen((v) => !v); setAiCutMsg(null); }}
           >
-            <Sparkles className="ico" /> AI cut turfs <span className="turf-soon">Soon</span>
+            <Sparkles className="ico" /> AI cut turfs
           </button>
-          {/* New turf: triggers the Mapbox Draw polygon tool in TurfMap. */}
-          <button
-            className="btn primary"
-            type="button"
+
+          {aiCutOpen && (
+            <div className="ai-cut-panel">
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
+                Auto-cut balanced turfs
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
+                Splits <b style={{ color: "var(--ink)" }}>{filteredCount.toLocaleString()}</b> filtered voters
+                into <b style={{ color: "var(--ink)" }}>{aiCutN}</b> roughly equal turfs by geography.
+              </div>
+              <div className="row" style={{ gap: 10, alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 12 }}>Number of turfs</span>
+                <span className="map-stepper">
+                  <button type="button" aria-label="decrease" disabled={aiCutN <= 2 || aiCutting}
+                    onClick={() => setAiCutN((n) => Math.max(2, n - 1))}>−</button>
+                  <span className="mono map-stepper-val">{aiCutN}</span>
+                  <button type="button" aria-label="increase" disabled={aiCutN >= 12 || aiCutting}
+                    onClick={() => setAiCutN((n) => Math.min(12, n + 1))}>+</button>
+                </span>
+              </div>
+              {aiCutMsg && (
+                <div style={{ fontSize: 12, marginBottom: 8,
+                  color: aiCutMsg.startsWith("⚠") ? "var(--rose)" : "var(--accent-ink)" }}>
+                  {aiCutMsg}
+                </div>
+              )}
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn ghost" type="button" style={{ flex: 1, fontSize: 12 }}
+                  disabled={aiCutting} onClick={() => setAiCutOpen(false)}>
+                  Cancel
+                </button>
+                <button className="btn primary" type="button" style={{ flex: 1, fontSize: 12 }}
+                  disabled={aiCutting || filteredCount === 0} onClick={handleAiCut}>
+                  {aiCutting ? "Cutting…" : "Cut turfs"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button className="btn primary" type="button"
             onClick={() => (mapControls ?? mapControlsRef.current)?.startDraw()}
           >
             <Plus className="ico" /> New turf
@@ -117,17 +165,13 @@ export function TurfView({
       </div>
 
       <div className={"turf-body" + (sel ? " detail-open" : "")}>
-        {/* ── Turf list ─────────────────────────────────────────────── */}
+        {/* Turf list */}
         <aside className="turf-list">
           <div className="vot-toolbar" style={{ padding: "10px 14px" }}>
             <div className="row" style={{ gap: 6, flex: 1 }}>
               <Search style={{ width: 13, height: 13, color: "var(--muted)" }} />
-              <input
-                className="turf-filter-input"
-                placeholder="Filter turfs"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <input className="turf-filter-input" placeholder="Filter turfs"
+                value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <button className="btn ghost" type="button"><SlidersHorizontal style={{ width: 13, height: 13 }} /></button>
           </div>
@@ -137,7 +181,8 @@ export function TurfView({
               <span className="turf-empty-ico"><MapPinned style={{ width: 20, height: 20 }} /></span>
               <b>No turfs yet</b>
               <span className="muted">
-                Filter the voters you want on the map, then click <b>New turf</b> or use the polygon tool (top-left) to cut and save your first turf.
+                Filter the voters you want on the map, then click <b>New turf</b>, use the
+                polygon tool (top-left), or try <b>AI cut turfs</b>.
               </span>
             </div>
           ) : (
@@ -147,10 +192,12 @@ export function TurfView({
               return (
                 <div className="turf-section" key={g.key}>
                   <div className="turf-section-h">
-                    <span className={g.dot} /> {g.label} <span className="turf-section-n mono">{rows.length}</span>
+                    <span className={g.dot} /> {g.label}{" "}
+                    <span className="turf-section-n mono">{rows.length}</span>
                   </div>
                   {rows.map((t) => (
-                    <TurfRow key={t.id} t={t} active={t.id === selId} onSelect={() => setSelId(t.id)} />
+                    <TurfRow key={t.id} t={t} active={t.id === selId}
+                      onSelect={() => setSelId(t.id === selId ? null : t.id)} />
                   ))}
                 </div>
               );
@@ -158,17 +205,17 @@ export function TurfView({
           )}
         </aside>
 
-        {/* ── Map — real Mapbox turf cutting + filtered voter pins ──── */}
-        <TurfMap voterPoints={voterPoints} onReady={handleMapReady} />
+        {/* Map */}
+        <TurfMap
+          voterPoints={voterPoints}
+          selectedTurfId={selId}
+          onReady={handleMapReady}
+          onTurfClick={(id) => setSelId((cur) => (cur === id ? null : id))}
+        />
 
-        {/* ── Turf detail ───────────────────────────────────────────── */}
+        {/* Detail drawer */}
         {sel && (
-          <TurfDetail
-            key={sel.id}
-            t={sel}
-            members={members}
-            onClose={() => setSelId(null)}
-          />
+          <TurfDetail key={sel.id} t={sel} members={members} onClose={() => setSelId(null)} />
         )}
       </div>
     </div>
@@ -176,7 +223,7 @@ export function TurfView({
 }
 
 function StatusBadge({ status, complete = "done" }: { status: string; complete?: string }) {
-  if (status === "active") return <span className="tag accent">live</span>;
+  if (status === "active")   return <span className="tag accent">live</span>;
   if (status === "complete") return <span className="tag teal">{complete}</span>;
   return <span className="tag">queued</span>;
 }
@@ -214,17 +261,24 @@ function TurfDetail({
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const handleDelete = () => {
+  // Inline rename state
+  const [renaming, setRenaming] = useState(false);
+  const [nameInput, setNameInput] = useState(t.name);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming) nameRef.current?.select();
+  }, [renaming]);
+
+  const commitRename = () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === t.name) { setRenaming(false); setNameInput(t.name); return; }
     setActionError(null);
     startTransition(async () => {
-      const res = await deleteTurf(t.id);
-      if (!res.ok) {
-        setActionError(res.error ?? "Failed to delete turf");
-        setConfirmDelete(false);
-        return;
-      }
-      router.refresh();
-      onClose();
+      const res = await renameTurf(t.id, trimmed);
+      if (!res.ok) { setActionError(res.error ?? "Failed to rename"); setNameInput(t.name); }
+      else router.refresh();
+      setRenaming(false);
     });
   };
 
@@ -232,10 +286,7 @@ function TurfDetail({
     setActionError(null);
     startTransition(async () => {
       const res = await assignTurf(t.id, memberId === "" ? null : memberId);
-      if (!res.ok) {
-        setActionError(res.error ?? "Failed to update assignee");
-        return;
-      }
+      if (!res.ok) { setActionError(res.error ?? "Failed to update assignee"); return; }
       router.refresh();
     });
   };
@@ -244,33 +295,70 @@ function TurfDetail({
     setActionError(null);
     startTransition(async () => {
       const res = await setTurfStatus(t.id, status);
-      if (!res.ok) {
-        setActionError(res.error ?? "Failed to update status");
-        return;
-      }
+      if (!res.ok) { setActionError(res.error ?? "Failed to update status"); return; }
       router.refresh();
     });
   };
 
-  // Current assignee membership id, derived from the members list.
+  const handleDelete = () => {
+    setActionError(null);
+    startTransition(async () => {
+      const res = await deleteTurf(t.id);
+      if (!res.ok) { setActionError(res.error ?? "Failed to delete turf"); setConfirmDelete(false); return; }
+      router.refresh();
+      onClose();
+    });
+  };
+
   const currentAssigneeId = members.find((m) => m.name === t.assignee)?.id ?? "";
 
   return (
     <aside className="drawer">
       <div className="drawer-head">
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div className="row" style={{ gap: 6 }}>
             <StatusBadge status={t.status} complete="complete" />
             {t.hasBoundary && <span className="tag mono">on map</span>}
             {isPending && <span className="muted" style={{ fontSize: 11 }}>Saving…</span>}
           </div>
-          <div style={{ fontWeight: 600, fontSize: 15, marginTop: 4 }}>{t.name}</div>
+
+          {/* Inline rename */}
+          {renaming ? (
+            <div className="row" style={{ gap: 6, marginTop: 4 }}>
+              <input
+                ref={nameRef}
+                className="turf-rename-input"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") { setRenaming(false); setNameInput(t.name); }
+                }}
+                onBlur={commitRename}
+                disabled={isPending}
+              />
+              <button type="button" className="btn ghost" style={{ padding: "3px 6px" }}
+                onMouseDown={(e) => { e.preventDefault(); commitRename(); }}>
+                <Check style={{ width: 13, height: 13 }} />
+              </button>
+            </div>
+          ) : (
+            <div className="row" style={{ gap: 6, marginTop: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {t.name}
+              </div>
+              <button type="button" className="btn ghost" style={{ padding: "2px 5px", flexShrink: 0 }}
+                title="Rename turf" onClick={() => { setNameInput(t.name); setRenaming(true); }}>
+                <Pencil style={{ width: 12, height: 12 }} />
+              </button>
+            </div>
+          )}
         </div>
-        <X className="x" style={{ width: 16, height: 16 }} onClick={onClose} />
+        <X className="x" style={{ width: 16, height: 16, flexShrink: 0 }} onClick={onClose} />
       </div>
 
       {actionError && (
-        <div style={{ margin: "0 14px", padding: "8px 12px", borderRadius: 8, background: "var(--rose-2)", color: "var(--rose)", fontSize: 12 }}>
+        <div style={{ margin: "0 14px", padding: "8px 12px", borderRadius: 8, background: "var(--rose-2,#fff1f2)", color: "var(--rose)", fontSize: 12 }}>
           ⚠ {actionError}
         </div>
       )}
@@ -293,23 +381,17 @@ function TurfDetail({
           </div>
         </div>
 
-        {/* ── Assignment ───────────────────────────────────────────── */}
+        {/* Assignment */}
         <div className="turf-detail-section">
           <div className="turf-detail-h">Assignment</div>
           <div className="field-row">
             <div className="lbl">Status</div>
             <div className="val">
               <div className="turf-select-wrap">
-                <select
-                  className="map-select"
-                  value={t.status}
-                  disabled={isPending}
+                <select className="map-select" value={t.status} disabled={isPending}
                   onChange={(e) => handleStatus(e.target.value as "queued" | "active" | "complete")}
-                  style={{ width: "100%" }}
-                >
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
+                  style={{ width: "100%" }}>
+                  {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <ChevronDown style={{ width: 12, height: 12, pointerEvents: "none" }} />
               </div>
@@ -319,20 +401,13 @@ function TurfDetail({
             <div className="lbl">Assignee</div>
             <div className="val">
               {members.length === 0 ? (
-                <span className="muted" style={{ fontSize: 12 }}>No canvassers in this campaign yet.</span>
+                <span className="muted" style={{ fontSize: 12 }}>No members yet.</span>
               ) : (
                 <div className="turf-select-wrap">
-                  <select
-                    className="map-select"
-                    value={currentAssigneeId}
-                    disabled={isPending}
-                    onChange={(e) => handleAssign(e.target.value)}
-                    style={{ width: "100%" }}
-                  >
+                  <select className="map-select" value={currentAssigneeId} disabled={isPending}
+                    onChange={(e) => handleAssign(e.target.value)} style={{ width: "100%" }}>
                     <option value="">Unassigned</option>
-                    {members.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name} · {m.role}</option>
-                    ))}
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
                   </select>
                   <ChevronDown style={{ width: 12, height: 12, pointerEvents: "none" }} />
                 </div>
@@ -349,7 +424,7 @@ function TurfDetail({
           </div>
         </div>
 
-        {/* ── Planning (coming soon) ───────────────────────────────── */}
+        {/* Planning */}
         <div className="turf-detail-section">
           <div className="turf-detail-h">Planning</div>
           <div className="turf-soon-row">
@@ -373,42 +448,29 @@ function TurfDetail({
           </div>
         </div>
 
-        {/* ── Delete ──────────────────────────────────────────────── */}
+        {/* Delete */}
         <div className="turf-detail-section" style={{ marginTop: "auto", paddingTop: 16 }}>
           {confirmDelete ? (
             <div className="turf-delete-confirm">
               <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
-                Delete <b>{t.name}</b>? This can't be undone.
+                Delete <b>{t.name}</b>? This can&apos;t be undone.
               </span>
               <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  style={{ flex: 1, fontSize: 12 }}
-                  disabled={isPending}
-                  onClick={() => setConfirmDelete(false)}
-                >
+                <button type="button" className="btn ghost" style={{ flex: 1, fontSize: 12 }}
+                  disabled={isPending} onClick={() => setConfirmDelete(false)}>
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  className="btn"
+                <button type="button" className="btn"
                   style={{ flex: 1, fontSize: 12, background: "var(--rose)", color: "#fff", borderColor: "var(--rose)" }}
-                  disabled={isPending}
-                  onClick={handleDelete}
-                >
+                  disabled={isPending} onClick={handleDelete}>
                   {isPending ? "Deleting…" : "Delete turf"}
                 </button>
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              className="btn ghost"
+            <button type="button" className="btn ghost"
               style={{ width: "100%", color: "var(--rose)", borderColor: "var(--rose,#f43f5e)", fontSize: 13, gap: 6 }}
-              disabled={isPending}
-              onClick={() => setConfirmDelete(true)}
-            >
+              disabled={isPending} onClick={() => setConfirmDelete(true)}>
               <Trash2 style={{ width: 13, height: 13 }} /> Delete turf
             </button>
           )}
@@ -417,14 +479,3 @@ function TurfDetail({
     </aside>
   );
 }
-
-function initialsOf(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "··";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-// Keep initialsOf in scope (used in TurfDetail avatar pattern — exported for
-// potential reuse elsewhere; suppresses unused-variable lint)
-void initialsOf;
