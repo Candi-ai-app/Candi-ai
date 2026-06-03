@@ -7,7 +7,7 @@ import { PRIMARY_NAV, V2_NAV } from "@/lib/nav";
 import { signOut } from "@/app/login/actions";
 
 // Canvassers get the field-focused subset; owners/directors see everything.
-const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/texting"]);
+const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/field", "/texting"]);
 
 /** Compact count for nav badges: 412847 → "413K", 600 → "600", 0 → "". */
 function compact(n: number): string {

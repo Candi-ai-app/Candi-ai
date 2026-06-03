@@ -4,6 +4,7 @@ import {
   Map,
   GitBranch,
   MessageSquare,
+  Navigation,
   Phone,
   Radio,
   Globe,
@@ -31,6 +32,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "HQ Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Voters", href: "/voters", icon: Users, badgeMuted: true },
   { label: "Canvassing", href: "/canvassing", icon: Map },
+  { label: "Field", href: "/field", icon: Navigation },
   { label: "Scripts", href: "/scripts", icon: GitBranch },
   { label: "Texting", href: "/texting", icon: MessageSquare },
 ];
@@ -49,6 +51,7 @@ export const CRUMBS: Record<string, string> = {
   "/": "HQ Dashboard",
   "/voters": "Voters",
   "/canvassing": "Canvassing",
+  "/field": "Field",
   "/scripts": "Scripts",
   "/texting": "Texting",
 };

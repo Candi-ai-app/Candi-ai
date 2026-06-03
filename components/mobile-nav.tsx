@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Map, GitBranch, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Map, Navigation, GitBranch, MessageSquare } from "lucide-react";
 
 const ITEMS = [
   { label: "HQ", href: "/", icon: LayoutDashboard },
   { label: "Voters", href: "/voters", icon: Users },
   { label: "Turf", href: "/canvassing", icon: Map },
+  { label: "Field", href: "/field", icon: Navigation },
   { label: "Scripts", href: "/scripts", icon: GitBranch },
   { label: "Texts", href: "/texting", icon: MessageSquare },
 ];
 
 // Canvassers get the field-focused subset; owners/directors see everything.
-const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/texting"]);
+const CANVASSER_HREFS = new Set(["/voters", "/canvassing", "/field", "/texting"]);
 
 export function MobileNav({ role = "director" }: { role?: string }) {
   const pathname = usePathname();
