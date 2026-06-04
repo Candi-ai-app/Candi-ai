@@ -10,6 +10,7 @@ import {
   saveTurf,
   listTurfs,
   setTurfRoute,
+  splitTurf,
   type SavedTurf,
   type GeoPolygon,
   type VoterPoint,
@@ -228,6 +229,8 @@ export type TurfMapControls = {
   splitEqually: (n: number) => Promise<{ saved: number; error?: string }>;
   /** Optimize a walking route over the doors inside a saved turf, persist + draw it. */
   generateRoute: (turfId: string) => Promise<{ stops: number; distanceMi?: number; error?: string }>;
+  /** Split a saved turf into n strips; the original is replaced by the children. */
+  splitTurf: (turfId: string, n: number) => Promise<{ created: number; error?: string }>;
   /** Current count of filtered voters (for the split panel label). */
   getFilteredCount: () => number;
   /** Toggle the "Filter doors" overlay panel on/off. */
@@ -469,6 +472,14 @@ export function TurfMap({
         await refresh();
         router.refresh();
         return { stops: ordered.length, distanceMi };
+      },
+
+      splitTurf: async (turfId: string, n: number) => {
+        const res = await splitTurf(turfId, n);
+        if (!res.ok) return { created: 0, error: res.error ?? "Failed to split turf" };
+        await refresh();
+        router.refresh();
+        return { created: res.created ?? 0 };
       },
 
       getFilteredCount: () => filteredRef.current.length,

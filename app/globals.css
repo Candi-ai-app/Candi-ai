@@ -634,19 +634,44 @@ table.t input[type="checkbox"] {
   min-height: 0;
 }
 .drawer-head {
-  padding: 14px 22px 10px 18px;
+  padding: 16px 24px 12px 20px;
   display: flex; align-items: center; gap: 10px;
   border-bottom: 1px solid var(--hairline);
 }
 .drawer-head .x { margin-left: auto; cursor: pointer; color: var(--muted); }
-/* Accessible icon close button (replaces a bare <X>) */
+/* Accessible icon close button (replaces a bare <X>) — sits with real right
+   padding so it doesn't hug the drawer edge. */
 .drawer-head .x-btn {
   margin-left: auto; flex-shrink: 0; display: inline-grid; place-items: center;
-  width: 28px; height: 28px; margin-right: -6px; border: 0; border-radius: 7px;
+  width: 28px; height: 28px; border: 0; border-radius: 7px;
   background: transparent; color: var(--muted); cursor: pointer;
 }
 .drawer-head .x-btn:hover { background: var(--surface-2); color: var(--ink); }
-.drawer-body { padding: 14px 22px 16px 18px; overflow-y: auto; flex: 1; }
+.drawer-body { padding: 16px 24px 20px 20px; overflow-y: auto; flex: 1; }
+
+/* Walking-route stop list inside the turf drawer */
+.turf-route-list {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--hairline); border-radius: 10px;
+}
+.turf-route-stop {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; font-size: 12.5px;
+  border-bottom: 1px solid var(--hairline);
+}
+.turf-route-stop:last-child { border-bottom: 0; }
+.turf-route-num {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.turf-route-addr { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Split panel */
+.turf-split-panel {
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+  background: var(--surface-2);
+}
 .field-row {
   display: flex; gap: 12px; align-items: flex-start;
   padding: 8px 0;

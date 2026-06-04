@@ -109,6 +109,14 @@ export function TurfView({
     return c.generateRoute(turfId);
   };
 
+  const onSplitTurf = async (turfId: string, n: number): Promise<{ created: number; error?: string }> => {
+    const c = ctrl();
+    if (!c) return { created: 0, error: "Map is still loading — try again in a second." };
+    const res = await c.splitTurf(turfId, n);
+    if (!res.error) setSelId(null); // original turf is replaced by its children
+    return res;
+  };
+
   // Split-equally panel (was "AI cut turfs")
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitN, setSplitN] = useState(4);
@@ -292,7 +300,7 @@ export function TurfView({
           {/* Detail drawer */}
           {sel && (
             <TurfDetail key={sel.id} t={sel} members={members}
-              onGenerateRoute={onGenerateRoute} onClose={() => setSelId(null)} />
+              onGenerateRoute={onGenerateRoute} onSplitTurf={onSplitTurf} onClose={() => setSelId(null)} />
           )}
         </div>
       ) : (
@@ -353,17 +361,32 @@ function TurfDetail({
   t,
   members,
   onGenerateRoute,
+  onSplitTurf,
   onClose,
 }: {
   t: TurfListItem;
   members: CampaignMember[];
   onGenerateRoute: (turfId: string) => Promise<RouteResult>;
+  onSplitTurf: (turfId: string, n: number) => Promise<{ created: number; error?: string }>;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Split-turf panel
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitN, setSplitN] = useState(2);
+  const [splitting, setSplitting] = useState(false);
+  const [splitErr, setSplitErr] = useState<string | null>(null);
+  const runSplit = async () => {
+    setSplitting(true); setSplitErr(null);
+    const res = await onSplitTurf(t.id, splitN);
+    setSplitting(false);
+    if (res.error) { setSplitErr(res.error); return; }
+    // Original is gone — the drawer closes via parent setSelId(null).
+  };
 
   // Rename
   const [renaming, setRenaming] = useState(false);
@@ -559,6 +582,56 @@ function TurfDetail({
           )}
           {routeErr && (
             <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--rose)" }}>⚠ {routeErr}</div>
+          )}
+
+          {/* Ordered stop list — the actual walking order, in the sidebar */}
+          {t.route.length > 0 && (
+            <ol className="turf-route-list">
+              {t.route.map((s, i) => (
+                <li key={`${s.address}-${i}`} className="turf-route-stop">
+                  <span className="turf-route-num mono">{i + 1}</span>
+                  <span className="turf-route-addr">{s.address}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        {/* Split this turf */}
+        <div className="turf-detail-section">
+          <div className="turf-detail-h">Split turf</div>
+          {!splitOpen ? (
+            <button type="button" className="btn" style={{ width: "100%", gap: 6 }}
+              title="Divide this turf into several smaller turfs to share across canvassers"
+              disabled={!t.hasBoundary} onClick={() => { setSplitOpen(true); setSplitErr(null); }}>
+              <Scissors style={{ width: 13, height: 13 }} /> Split into pieces
+            </button>
+          ) : (
+            <div className="turf-split-panel">
+              <div className="row" style={{ gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>Pieces</span>
+                <span className="map-stepper">
+                  <button type="button" aria-label="fewer" disabled={splitN <= 2 || splitting}
+                    onClick={() => setSplitN((n) => Math.max(2, n - 1))}>−</button>
+                  <span className="mono map-stepper-val">{splitN}</span>
+                  <button type="button" aria-label="more" disabled={splitN >= 8 || splitting}
+                    onClick={() => setSplitN((n) => Math.min(8, n + 1))}>+</button>
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 10px" }}>
+                Divides <b style={{ color: "var(--ink)" }}>{t.name}</b> into {splitN} side-by-side turfs.
+                This replaces the original.
+              </div>
+              {splitErr && <div style={{ fontSize: 11.5, color: "var(--rose)", marginBottom: 8 }}>⚠ {splitErr}</div>}
+              <div className="row" style={{ gap: 8 }}>
+                <button type="button" className="btn ghost" style={{ flex: 1, fontSize: 12 }}
+                  disabled={splitting} onClick={() => setSplitOpen(false)}>Cancel</button>
+                <button type="button" className="btn primary" style={{ flex: 1, fontSize: 12 }}
+                  disabled={splitting} onClick={runSplit}>
+                  {splitting ? "Splitting…" : `Split into ${splitN}`}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

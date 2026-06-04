@@ -36,6 +36,8 @@ export type TurfListItem = {
   hasBoundary: boolean;
   /** Number of stops in the generated walking route (0 = no route yet). */
   routeStops: number;
+  /** The ordered walking-route stops (empty when no route generated). */
+  route: RouteStop[];
 };
 
 /** Header stats for the canvassing module, all from real campaign data. */
@@ -192,6 +194,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
     assigneeId: t.assignee_id,
     hasBoundary: t.boundary != null,
     routeStops: Array.isArray(t.route) ? t.route.length : 0,
+    route: Array.isArray(t.route) ? (t.route as RouteStop[]) : [],
   }));
 
   const doorsToday = ((doorsTodayRes.data ?? []) as { created_at: string }[]).reduce(
@@ -315,6 +318,31 @@ export async function setTurfRoute(
   }
   revalidatePath("/canvassing");
   return { ok: true };
+}
+
+/**
+ * Split a turf into N vertical strips (via the split_turf RPC). The original is
+ * replaced by N children named "<orig> · k", each with server-computed counts.
+ */
+export async function splitTurf(
+  turfId: string,
+  n: number
+): Promise<{ ok: boolean; created?: number; error?: string }> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return { ok: false, error: "No active campaign" };
+  if (n < 2 || n > 12) return { ok: false, error: "Choose between 2 and 12 pieces" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("split_turf", {
+    p_campaign: campaignId,
+    p_turf: turfId,
+    p_n: n,
+  });
+  if (error) {
+    console.error("splitTurf:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/canvassing");
+  return { ok: true, created: typeof data === "number" ? data : undefined };
 }
 
 /** Rename a turf. Name is trimmed; empty string is rejected. */
