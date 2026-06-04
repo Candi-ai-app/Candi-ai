@@ -52,13 +52,30 @@ function selectedTurfFeatures(turfs: SavedTurf[], selectedId: string | null) {
   };
 }
 
+function voterName(p: VoterPoint): string {
+  const n = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
+  return n || "Voter";
+}
+
+/** Minimal HTML escape for popup text (name/address come from the DB). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string
+  );
+}
+
 function pointFeatures(points: VoterPoint[]) {
   return {
     type: "FeatureCollection" as const,
     features: points.map((p) => ({
       type: "Feature" as const,
       geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
-      properties: { party: p.party ?? "I" },
+      properties: {
+        party: p.party ?? "I",
+        id: p.external_id,
+        name: voterName(p),
+        address: p.address ?? "",
+      },
     })),
   };
 }
@@ -392,6 +409,41 @@ export function TurfMap({
       map.on("click", "saved-fill", (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         if (id) onTurfClickRef.current?.(id);
+      });
+
+      // ── Voter dot hover tooltip (name + address) + click-through ──────────────
+      const popup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10,
+        className: "voter-pop",
+      });
+      map.on("mousemove", "voter-circles", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        map.getCanvas().style.cursor = "pointer";
+        const props = f.properties as { name?: string; address?: string } | undefined;
+        const geom = f.geometry as { type: string; coordinates: [number, number] };
+        const [lng, lat] = geom.coordinates;
+        const name = props?.name || "Voter";
+        const address = props?.address || "";
+        popup
+          .setLngLat([lng, lat])
+          .setHTML(
+            `<div class="voter-pop-name">${escapeHtml(name)}</div>` +
+              (address ? `<div class="voter-pop-addr">${escapeHtml(address)}</div>` : "") +
+              `<div class="voter-pop-hint">Click to open voter →</div>`
+          )
+          .addTo(map);
+      });
+      map.on("mouseleave", "voter-circles", () => {
+        map.getCanvas().style.cursor = "";
+        popup.remove();
+      });
+      // Click a voter dot → open that voter's record on the Voters page.
+      map.on("click", "voter-circles", (e) => {
+        const id = e.features?.[0]?.properties?.id as string | undefined;
+        if (id) router.push(`/voters?v=${encodeURIComponent(id)}`);
       });
     });
 

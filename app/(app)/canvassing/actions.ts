@@ -60,6 +60,8 @@ export type CanvassingData = { turfs: TurfListItem[]; stats: TurfStats; members:
 /** One plottable voter for the turf map (from the voter_points RPC). */
 export type VoterPoint = {
   external_id: string;
+  first_name: string | null;
+  last_name: string | null;
   lng: number;
   lat: number;
   party: "D" | "R" | "I" | null;

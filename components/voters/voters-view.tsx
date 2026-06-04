@@ -86,6 +86,14 @@ export function VotersView({
   // demo values (mock district, contact-history-derived count) when showing mock data.
   const districtLabel = usingLive ? district ?? "" : CAMPAIGN.district;
   const [selected, setSelected] = useState<string | null>(null);
+  // Deep-link: /voters?v=<external_id> (e.g. clicking a dot on the turf map)
+  // opens that voter's detail card on mount. Read from the URL directly to avoid
+  // the useSearchParams Suspense requirement.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = new URLSearchParams(window.location.search).get("v");
+    if (v) setSelected(v);
+  }, []);
   // Checkbox multi-select set (voter ids) for the toolbar bulk actions.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);

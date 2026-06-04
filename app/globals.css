@@ -672,6 +672,17 @@ table.t input[type="checkbox"] {
   border: 1px solid var(--border); border-radius: 10px; padding: 12px;
   background: var(--surface-2);
 }
+
+/* Voter dot hover tooltip on the turf map */
+.voter-pop .mapboxgl-popup-content {
+  padding: 8px 11px; border-radius: 10px;
+  box-shadow: 0 6px 20px -6px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+}
+.voter-pop .mapboxgl-popup-tip { display: none; }
+.voter-pop-name { font-weight: 650; font-size: 12.5px; color: var(--ink); }
+.voter-pop-addr { font-size: 11.5px; color: var(--ink-2); margin-top: 1px; }
+.voter-pop-hint { font-size: 10.5px; color: var(--accent-deep); margin-top: 5px; font-weight: 550; }
 .field-row {
   display: flex; gap: 12px; align-items: flex-start;
   padding: 8px 0;
