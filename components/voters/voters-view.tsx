@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { VOTERS, CAMPAIGN, type Voter, type Party, partyLabel, partyFull, partyTag } from "@/lib/mock-data";
 import { MAX_M, voteCount } from "@/lib/elections";
-import { updateVoter, tagVoters, getHousehold, type HouseholdMember } from "@/app/(app)/voters/actions";
+import { updateVoter, tagVoters, getHousehold, getVoterContacts, type HouseholdMember, type VoterContact } from "@/app/(app)/voters/actions";
 
 const ROW_H = 38;
 
@@ -684,9 +684,9 @@ function VoterDetail({
         {/* Household — others at this address */}
         <Household voterId={v.id} onSelect={onSelect} />
 
-        {/* Activity — recent contact / timeline */}
+        {/* Activity — real contact history for this voter (door logs, texts, calls) */}
         <DetailSection title="Activity">
-          <Timeline />
+          <Timeline voterId={v.id} />
         </DetailSection>
       </div>
 
@@ -1112,25 +1112,65 @@ function VoteHistory({ history }: { history: string }) {
   );
 }
 
-function Timeline() {
-  const events = [
-    { t: "3d ago", who: "Door · Imani B.", text: "Strong support · housing", tone: "good" },
-    { t: "12d ago", who: "Text · auto", text: "VBM reminder sent", tone: "neutral" },
-    { t: "34d ago", who: "Mail · HQ", text: "Intro mailer · district", tone: "neutral" },
-    { t: "Apr 2", who: "Door · Felicia B.", text: "Not home", tone: "miss" },
-  ];
+// Relative "3d ago" style time from an ISO timestamp.
+function relTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const RESULT_TONE: Record<string, string> = {
+  supporter: "good", undecided: "neutral", "not-home": "miss",
+  refused: "miss", "lit-dropped": "neutral", moved: "miss",
+};
+
+// Real contact history for the selected voter. Door logs from the GPS field app
+// (with notes + support) surface here, newest first.
+function Timeline({ voterId }: { voterId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [contacts, setContacts] = useState<VoterContact[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    getVoterContacts(voterId)
+      .then((rows) => { if (alive) setContacts(rows); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [voterId]);
+
+  if (loading) return <div className="muted" style={{ fontSize: 12 }}>Loading activity…</div>;
+  if (contacts.length === 0)
+    return <div className="muted" style={{ fontSize: 12 }}>No contact history yet. Door knocks and texts will appear here.</div>;
+
+  const fmtResult = (r: string | null) =>
+    r ? r.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Contacted";
+
   return (
     <div className="timeline">
-      {events.map((e, i) => (
-        <div key={i} className="tl-row">
-          <div className="tl-dot" data-tone={e.tone} />
-          <div className="tl-time mono">{e.t}</div>
-          <div className="tl-body">
-            <div style={{ fontSize: 12.5, fontWeight: 500 }}>{e.text}</div>
-            <div className="muted" style={{ fontSize: 11 }}>{e.who}</div>
+      {contacts.map((c) => {
+        const channel = c.channel.charAt(0).toUpperCase() + c.channel.slice(1);
+        const headline =
+          fmtResult(c.result) + (c.support != null && c.support > 0 ? ` · support ${c.support}/5` : "");
+        return (
+          <div key={c.id} className="tl-row">
+            <div className="tl-dot" data-tone={RESULT_TONE[c.result ?? ""] ?? "neutral"} />
+            <div className="tl-time mono">{relTime(c.createdAt)}</div>
+            <div className="tl-body">
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{headline}</div>
+              {c.note && <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 1 }}>{c.note}</div>}
+              <div className="muted" style={{ fontSize: 11 }}>{channel}</div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

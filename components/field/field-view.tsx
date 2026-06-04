@@ -1,11 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FieldTurf } from "@/app/(app)/field/actions";
+import { Phone, MessageSquare, Navigation } from "lucide-react";
+import type { FieldTurf, FieldStop } from "@/app/(app)/field/actions";
 import { logDoorContact } from "@/app/(app)/field/actions";
 import type { RouteStop } from "@/app/(app)/canvassing/actions";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+// ── Distance helpers (step-by-step guidance) ──────────────────────────────────
+function haversineMeters(a: { lng: number; lat: number }, b: { lng: number; lat: number }): number {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const la1 = (a.lat * Math.PI) / 180, la2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function fmtDistance(m: number): string {
+  const ft = m * 3.28084;
+  if (ft < 1000) return `${Math.round(ft / 10) * 10} ft`;
+  return `${(m / 1609.34).toFixed(1)} mi`;
+}
+const PARTY_LABEL: Record<string, string> = { D: "Dem", R: "Rep", I: "Ind" };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ResultType = "not_home" | "supporter" | "refused" | "moved" | null;
@@ -286,31 +303,69 @@ function updateStopLayers(
   }
 }
 
+// ── Voter contact card (attached to a stop) ──────────────────────────────────
+function StopVoterCard({ stop }: { stop: FieldStop }) {
+  const v = stop.voter;
+  if (!v) {
+    return (
+      <div className="field-voter-card field-voter-card-empty">
+        <span className="muted">No registered voter matched to this address.</span>
+      </div>
+    );
+  }
+  const tel = v.phone ? v.phone.replace(/[^\d+]/g, "") : "";
+  return (
+    <div className="field-voter-card">
+      <div className="field-voter-top">
+        <span className="field-voter-name">{v.name}</span>
+        {v.party && <span className={"tag party-" + v.party.toLowerCase()}>{PARTY_LABEL[v.party] ?? v.party}</span>}
+        {stop.othersAtAddress > 0 && (
+          <span className="muted field-voter-others">+{stop.othersAtAddress} at address</span>
+        )}
+      </div>
+      <div className="field-voter-meta">
+        <span className="field-voter-support">
+          Support:{" "}
+          <b>{v.support != null && v.support > 0 ? `${v.support}/5` : "—"}</b>
+        </span>
+        {tel ? (
+          <span className="field-voter-contacts">
+            <a className="field-voter-link" href={`tel:${tel}`}><Phone style={{ width: 12, height: 12 }} /> Call</a>
+            <a className="field-voter-link" href={`sms:${tel}`}><MessageSquare style={{ width: 12, height: 12 }} /> Text</a>
+          </span>
+        ) : (
+          <span className="muted" style={{ fontSize: 11 }}>No phone on file</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Result Card (inline for selected stop) ───────────────────────────────────
 function ResultCard({
   stop,
   onLog,
   loading,
 }: {
-  stop: RouteStop;
+  stop: FieldStop;
   onLog: (result: string, support: number | null, notes: string) => void;
   loading: boolean;
 }) {
   const [resultType, setResultType] = useState<ResultType>(null);
-  const [support, setSupport] = useState<number | null>(null);
+  const [support, setSupport] = useState<number | null>(stop.voter?.support ?? null);
   const [notes, setNotes] = useState("");
 
   const handleLog = () => {
     if (!resultType) return;
     onLog(RESULT_LABELS[resultType], resultType === "supporter" ? support : null, notes);
     setResultType(null);
-    setSupport(null);
+    setSupport(stop.voter?.support ?? null);
     setNotes("");
   };
 
   return (
     <div className="field-result-card">
-      <div className="field-result-addr">{stop.address}</div>
+      <StopVoterCard stop={stop} />
       <div className="field-btn-row">
         {(["not_home", "supporter", "refused", "moved"] as ResultType[]).map((r) => (
           <button
@@ -371,20 +426,21 @@ function WalkView({
   turf: FieldTurf;
   onDone: () => void;
 }) {
-  const { route } = turf;
+  const stops = turf.stops;
   const [doneAddresses, setDoneAddresses] = useState<Set<string>>(new Set());
   const [currentIdx, setCurrentIdx] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const handleLog = useCallback(
     async (result: string, support: number | null, notes: string) => {
-      const stop = route[currentIdx];
+      const stop = stops[currentIdx];
       if (!stop) return;
 
       setSaving(true);
       await logDoorContact({
         turfId: turf.id,
         stopAddress: stop.address,
+        voterId: stop.voter?.voterId ?? null,
         result,
         support,
         notes,
@@ -397,21 +453,25 @@ function WalkView({
         return next;
       });
 
-      // Auto-advance to next undone stop
-      const nextIdx = findNextUndone(route, currentIdx, doneAddresses, stop.address);
+      const nextIdx = findNextUndone(stops, currentIdx, doneAddresses, stop.address);
       if (nextIdx !== null) setCurrentIdx(nextIdx);
     },
-    [route, currentIdx, doneAddresses, turf.id]
+    [stops, currentIdx, doneAddresses, turf.id]
   );
 
   const doneCount = doneAddresses.size;
-  const totalCount = route.length;
+  const totalCount = stops.length;
   const progress = totalCount > 0 ? doneCount / totalCount : 0;
+
+  // Step-by-step guidance: distance from the current stop to the next one.
+  const current = stops[currentIdx];
+  const next = stops[currentIdx + 1] ?? null;
+  const distToNext = current && next ? haversineMeters(current, next) : null;
 
   return (
     <div className="field-wrap">
       <WalkMap
-        route={route}
+        route={turf.route}
         currentStopIndex={currentIdx}
         doneAddresses={doneAddresses}
       />
@@ -428,14 +488,29 @@ function WalkView({
           <div className="field-progress">
             <i style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
+          {/* Step-by-step instruction line */}
+          {current && (
+            <div className="field-step-guide">
+              <Navigation style={{ width: 13, height: 13, color: "var(--accent-deep)" }} />
+              <span>
+                <b>Stop {currentIdx + 1} of {totalCount}</b> · {current.address}
+                {next && distToNext != null && (
+                  <> · then <b>{fmtDistance(distToNext)}</b> to {next.address}</>
+                )}
+                {!next && <> · last stop on this route</>}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Stop list */}
         <div className="field-stop-list">
-          {route.map((stop, idx) => {
+          {stops.map((stop, idx) => {
             const isDone = doneAddresses.has(stop.address);
             const isCurrent = idx === currentIdx && !isDone;
             const statusChip = isDone ? "done" : isCurrent ? "current" : "upcoming";
+            const prev = stops[idx - 1] ?? null;
+            const legDist = prev ? haversineMeters(prev, stop) : null;
 
             return (
               <div key={stop.address + idx} className={"field-stop-row" + (isCurrent ? " current" : "")}>
@@ -449,11 +524,15 @@ function WalkView({
                     disabled={isDone}
                   >
                     {stop.address}
+                    {stop.voter && <span className="field-stop-voter">{stop.voter.name}</span>}
                   </button>
                   <span className={"tag field-stop-chip " + (isDone ? "teal" : isCurrent ? "accent" : "und")}>
                     {statusChip}
                   </span>
                 </div>
+                {legDist != null && !isCurrent && (
+                  <div className="field-stop-leg muted">{fmtDistance(legDist)} walk</div>
+                )}
 
                 {isCurrent && (
                   <div style={{ gridColumn: "1 / -1", marginTop: 8 }}>
@@ -477,7 +556,7 @@ function WalkView({
 }
 
 function findNextUndone(
-  route: RouteStop[],
+  route: { address: string }[],
   currentIdx: number,
   doneAddresses: Set<string>,
   justDone: string

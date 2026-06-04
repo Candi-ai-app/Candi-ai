@@ -155,3 +155,58 @@ export async function getHousehold(
   }));
   return { address, members };
 }
+
+/** One contact entry for a voter's activity timeline. */
+export type VoterContact = {
+  id: string;
+  channel: string;
+  result: string | null;
+  support: number | null;
+  /** Human note with the internal turf:/address: tags stripped off. */
+  note: string;
+  createdAt: string;
+};
+
+/**
+ * Recent contacts for one voter (newest first), for the detail card's Activity
+ * timeline. `externalId` is the row id the UI carries (voters.external_id). Notes
+ * logged at the door (incl. from the GPS field app) surface here. Scoped to the
+ * active campaign via RLS + an explicit campaign filter.
+ */
+export async function getVoterContacts(externalId: string): Promise<VoterContact[]> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId || !externalId) return [];
+  const supabase = await createClient();
+
+  const { data: voter } = await supabase
+    .from("voters")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .eq("external_id", externalId)
+    .maybeSingle();
+  if (!voter) return [];
+
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id, channel, result, support, notes, created_at")
+    .eq("campaign_id", campaignId)
+    .eq("voter_id", (voter as { id: string }).id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) {
+    console.error("getVoterContacts:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as Array<{
+    id: string; channel: string; result: string | null; support: number | null; notes: string | null; created_at: string;
+  }>).map((c) => ({
+    id: c.id,
+    channel: c.channel,
+    result: c.result,
+    support: c.support,
+    // Strip the internal " | turf:… | address:…" context the field app appends.
+    note: (c.notes ?? "").split(" | turf:")[0].trim(),
+    createdAt: c.created_at,
+  }));
+}
