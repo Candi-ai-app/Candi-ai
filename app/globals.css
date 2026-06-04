@@ -1544,9 +1544,41 @@ svg.ico { display: block; }
 .canv-card-id b { font-size: 13.5px; font-weight: 600; }
 .canv-card-id .muted { font-size: 11px; text-transform: capitalize; }
 .canv-card-stat { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
-.canv-gps { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--mute-2); background: var(--surface-2);
-  border: 1px dashed var(--border); border-radius: 8px; padding: 7px 10px; }
+.canv-gps { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--mute-2); background: var(--surface-2);
+  border: 1px dashed var(--border); border-radius: 8px; padding: 7px 10px; flex-wrap: wrap; }
+.canv-gps.live { border-style: solid; color: var(--ink-2); }
+.canv-gps-status { font-weight: 600; }
+.canv-gps-sep { color: var(--muted); }
+.canv-gps-seen { font-size: 11px; }
 .canv-none { font-size: 12px; padding: 2px 0; }
+
+/* ── Live field map (Canvassers tab) ──────────────────────────────────────── */
+.canv-live-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.canv-live-count { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.canv-live-map {
+  position: relative; height: 260px; width: 100%;
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  margin-bottom: 18px; background: var(--surface-2);
+}
+.canv-live-empty {
+  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; padding: 20px; font-size: 12.5px; color: var(--muted);
+  background: var(--surface-2);
+}
+/* Status dots (shared) */
+.canv-live-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.canv-live-dot.active  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.22); }
+.canv-live-dot.idle    { background: #f59e0b; }
+.canv-live-dot.offline { background: #94a3b8; }
+/* Map markers: initials chip colored by status */
+.canv-live-marker {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: #fff; cursor: default;
+  border: 2px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,0.3);
+}
+.canv-live-marker.active  { background: #16a34a; box-shadow: 0 0 0 5px rgba(34,197,94,0.25), 0 1px 6px rgba(0,0,0,0.3); }
+.canv-live-marker.idle    { background: #d97706; }
+.canv-live-marker.offline { background: #64748b; }
 .canv-turf-list { display: flex; flex-direction: column; gap: 6px; }
 .canv-turf-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface-2);
   border: 1px solid var(--hairline); border-radius: 9px; font-size: 12.5px; }

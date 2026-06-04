@@ -203,3 +203,52 @@ export async function logDoorContact(params: {
   revalidatePath("/field");
   return { ok: true };
 }
+
+/**
+ * Upsert the current canvasser's live GPS location (called every ~15s by the
+ * field app while walking). Resolves the signed-in user's membership in the
+ * active campaign and writes one row keyed by membership.
+ */
+export async function pingLocation(params: {
+  lng: number;
+  lat: number;
+  accuracy?: number | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const campaign = await getActiveCampaign();
+  if (!campaign) return { ok: false, error: "No active campaign" };
+  if (!Number.isFinite(params.lng) || !Number.isFinite(params.lat)) {
+    return { ok: false, error: "Invalid coordinates" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in" };
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("org_id", campaign.org_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!membership) return { ok: false, error: "No membership found" };
+
+  const { error } = await supabase.from("canvasser_locations").upsert(
+    {
+      membership_id: (membership as { id: string }).id,
+      campaign_id: campaign.id,
+      lng: params.lng,
+      lat: params.lat,
+      accuracy: params.accuracy ?? null,
+      status: "active",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "membership_id" }
+  );
+  if (error) {
+    console.error("pingLocation:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}

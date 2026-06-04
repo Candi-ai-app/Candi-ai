@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Phone, MessageSquare, Navigation } from "lucide-react";
 import type { FieldTurf, FieldStop } from "@/app/(app)/field/actions";
-import { logDoorContact } from "@/app/(app)/field/actions";
+import { logDoorContact, pingLocation } from "@/app/(app)/field/actions";
 import type { RouteStop } from "@/app/(app)/canvassing/actions";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -430,6 +430,28 @@ function WalkView({
   const [doneAddresses, setDoneAddresses] = useState<Set<string>>(new Set());
   const [currentIdx, setCurrentIdx] = useState(0);
   const [saving, setSaving] = useState(false);
+
+  // Live location: while walking a turf, ping the canvasser's GPS to the server
+  // every ~15s so the owner's Canvassers tab can track them in real time.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    let last = 0;
+    const watch = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - last < 15000) return; // throttle to one ping / 15s
+        last = now;
+        void pingLocation({
+          lng: pos.coords.longitude,
+          lat: pos.coords.latitude,
+          accuracy: pos.coords.accuracy ?? null,
+        });
+      },
+      () => { /* GPS denied/unavailable — no pings */ },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+    );
+    return () => navigator.geolocation.clearWatch(watch);
+  }, []);
 
   const handleLog = useCallback(
     async (result: string, support: number | null, notes: string) => {

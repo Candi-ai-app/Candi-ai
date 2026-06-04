@@ -411,3 +411,63 @@ export async function deleteTurfs(
   revalidatePath("/canvassing");
   return { ok: true, deleted: count ?? ids.length };
 }
+
+/** A canvasser's live position + today's progress, for the owner's Canvassers map. */
+export type CanvasserLocation = {
+  membershipId: string;
+  lng: number;
+  lat: number;
+  updatedAt: string;
+  doorsToday: number;
+  status: "active" | "idle" | "offline";
+};
+
+/**
+ * Live locations for every canvasser who has pinged from the field app, plus the
+ * doors each has knocked today. Polled by the Canvassers tab for near-real-time
+ * tracking. RLS-scoped to the active campaign.
+ */
+export async function getCanvasserLocations(): Promise<CanvasserLocation[]> {
+  const campaign = await getActiveCampaign();
+  if (!campaign) return [];
+  const supabase = await createClient();
+
+  const sinceToday = new Date();
+  sinceToday.setHours(0, 0, 0, 0);
+  const todayKey = dayKey(new Date());
+
+  const [locRes, contactsRes] = await Promise.all([
+    supabase
+      .from("canvasser_locations")
+      .select("membership_id, lng, lat, updated_at")
+      .eq("campaign_id", campaign.id),
+    supabase
+      .from("contacts")
+      .select("canvasser_id, created_at")
+      .eq("campaign_id", campaign.id)
+      .eq("channel", "door")
+      .gte("created_at", sinceToday.toISOString())
+      .limit(20000),
+  ]);
+
+  const doorsByCanv = new Map<string, number>();
+  for (const c of (contactsRes.data ?? []) as { canvasser_id: string | null; created_at: string }[]) {
+    if (c.canvasser_id && dayKey(new Date(c.created_at)) === todayKey) {
+      doorsByCanv.set(c.canvasser_id, (doorsByCanv.get(c.canvasser_id) ?? 0) + 1);
+    }
+  }
+
+  const now = Date.now();
+  return ((locRes.data ?? []) as { membership_id: string; lng: number; lat: number; updated_at: string }[]).map((l) => {
+    const ageMin = (now - new Date(l.updated_at).getTime()) / 60000;
+    const status: CanvasserLocation["status"] = ageMin < 3 ? "active" : ageMin < 15 ? "idle" : "offline";
+    return {
+      membershipId: l.membership_id,
+      lng: l.lng,
+      lat: l.lat,
+      updatedAt: l.updated_at,
+      doorsToday: doorsByCanv.get(l.membership_id) ?? 0,
+      status,
+    };
+  });
+}
