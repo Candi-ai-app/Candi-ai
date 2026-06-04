@@ -19,13 +19,14 @@ export default async function NewCampaignPage({
   if (!user) redirect("/login");
 
   // Owners/directors only — canvassers can't create campaigns.
-  const { data: membership } = await supabase
+  // Use highestRole (not maybeSingle) — users in multiple orgs have multiple rows.
+  const { data: memberships } = await supabase
     .from("memberships")
     .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const role = (membership?.role as string) ?? "canvasser";
-  if (role !== "owner" && role !== "director") redirect("/select");
+    .eq("user_id", user.id);
+  const { highestRole, isAdminRole } = await import("@/lib/auth");
+  const role = highestRole(memberships);
+  if (!isAdminRole(role)) redirect("/select");
 
   // Resume flow: load the draft campaign to prefill the wizard. RLS scopes this
   // to the user's orgs; if it's missing, fall back to a fresh wizard.

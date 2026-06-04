@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -9,8 +9,13 @@ import {
   Trash2,
   PencilLine,
   Loader2,
+  Pencil,
+  ImagePlus,
+  X,
+  Check,
 } from "lucide-react";
-import { selectCampaign, deleteCampaign } from "@/app/select/actions";
+import { selectCampaign, deleteCampaign, updateCampaign } from "@/app/select/actions";
+import { createClient } from "@/utils/supabase/client";
 import type { PickerCampaign } from "@/components/select/campaign-picker";
 
 function formatDate(d: string | null): string | null {
@@ -33,6 +38,183 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// ── Edit modal ─────────────────────────────────────────────────────────────
+function EditModal({
+  campaign: c,
+  onClose,
+}: {
+  campaign: PickerCampaign;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(c.candidate);
+  const [office, setOffice] = useState(c.office ?? "");
+  const [district, setDistrict] = useState(c.district ?? "");
+  const [date, setDate] = useState(c.election_date ?? "");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(c.photo_url ?? null);
+  const [photoUrl, setPhotoUrl] = useState<string>(c.photo_url ?? "");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSave] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Close on Escape
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape" && !saving) onClose(); };
+    document.addEventListener("keydown", fn);
+    return () => document.removeEventListener("keydown", fn);
+  }, [saving, onClose]);
+
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 4 * 1024 * 1024) { setError("Photo must be under 4 MB"); return; }
+    setPhotoFile(f);
+    setPhotoPreview(URL.createObjectURL(f));
+    setError(null);
+  }
+
+  async function uploadPhoto(): Promise<string | null> {
+    if (!photoFile) return photoUrl || null;
+    try {
+      const supabase = createClient();
+      const ext = (photoFile.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const path = `${c.id}/${Date.now()}.${ext || "jpg"}`;
+      const { error: upErr } = await supabase.storage
+        .from("candidates")
+        .upload(path, photoFile, { upsert: true, contentType: photoFile.type });
+      if (upErr) { console.error("photo upload:", upErr.message); return photoUrl || null; }
+      const { data } = supabase.storage.from("candidates").getPublicUrl(path);
+      return data.publicUrl;
+    } catch { return photoUrl || null; }
+  }
+
+  function onSave() {
+    if (!name.trim()) { setError("Name is required"); return; }
+    setError(null);
+    startSave(async () => {
+      setUploading(true);
+      const url = await uploadPhoto();
+      setUploading(false);
+      const res = await updateCampaign(c.id, {
+        candidate: name.trim(),
+        office: office.trim() || null,
+        district: district.trim() || null,
+        election_date: date || null,
+        photo_url: url,
+      });
+      if (!res.ok) { setError(res.error ?? "Save failed"); return; }
+      onClose();
+    });
+  }
+
+  return (
+    <div className="edit-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+      <div className="edit-modal" role="dialog" aria-label="Edit campaign">
+        <div className="edit-modal-head">
+          <h2 className="edit-modal-title">Edit campaign</h2>
+          <button type="button" className="edit-modal-close" aria-label="Close" onClick={onClose} disabled={saving}>
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
+
+        <div className="edit-modal-body">
+          {/* Photo */}
+          <div className="edit-modal-photo-row">
+            <div
+              className="edit-modal-photo"
+              onClick={() => fileRef.current?.click()}
+              title="Click to change photo"
+            >
+              {photoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="Candidate" width={72} height={72} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%" }} />
+              ) : (
+                <span className="edit-modal-initials">{initials(name || c.candidate)}</span>
+              )}
+              <div className="edit-modal-photo-overlay">
+                <ImagePlus style={{ width: 18, height: 18 }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Candidate photo</div>
+              <button type="button" className="edit-modal-photo-btn" onClick={() => fileRef.current?.click()}>
+                {photoPreview ? "Change photo" : "Add photo"}
+              </button>
+              {photoPreview && (
+                <button type="button" className="edit-modal-photo-remove" onClick={() => {
+                  setPhotoFile(null); setPhotoPreview(null); setPhotoUrl("");
+                }}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickFile} />
+          </div>
+
+          {/* Fields */}
+          <label className="edit-modal-label">
+            Candidate name
+            <input
+              className="edit-modal-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Full name"
+              disabled={saving}
+            />
+          </label>
+
+          <label className="edit-modal-label">
+            Office
+            <input
+              className="edit-modal-input"
+              value={office}
+              onChange={(e) => setOffice(e.target.value)}
+              placeholder="e.g. County Commission"
+              disabled={saving}
+            />
+          </label>
+
+          <label className="edit-modal-label">
+            District / Location
+            <input
+              className="edit-modal-input"
+              value={district}
+              onChange={(e) => setDistrict(e.target.value)}
+              placeholder="e.g. Broward District 9"
+              disabled={saving}
+            />
+          </label>
+
+          <label className="edit-modal-label">
+            Election date
+            <input
+              type="date"
+              className="edit-modal-input"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={saving}
+            />
+          </label>
+
+          {error && <div className="edit-modal-error">⚠ {error}</div>}
+        </div>
+
+        <div className="edit-modal-foot">
+          <button type="button" className="btn ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className="btn primary" onClick={onSave} disabled={saving || uploading}>
+            {saving || uploading ? <Loader2 className="onb-spin" aria-hidden /> : <Check style={{ width: 14, height: 14 }} />}
+            {saving || uploading ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Campaign card ──────────────────────────────────────────────────────────
 export function CampaignCard({
   campaign: c,
   canManage,
@@ -42,17 +224,14 @@ export function CampaignCard({
 }) {
   const date = formatDate(c.election_date);
   const meta = [c.office, c.district].filter(Boolean).join(" · ");
-  // A campaign with no office AND no district is an incomplete draft.
   const isDraft = !c.office && !c.district;
 
-  // The kebab popover doubles as the delete confirm — a single light step
-  // (no type-to-confirm), with Cancel / Delete (Delete destructive-styled).
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const popId = useId();
 
-  // Close the popover on outside click / Escape.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
@@ -74,7 +253,6 @@ export function CampaignCard({
     setDeleting(true);
     try {
       await deleteCampaign(c.id);
-      // Server revalidates /select; the card disappears on the refreshed list.
       setOpen(false);
     } finally {
       setDeleting(false);
@@ -82,7 +260,7 @@ export function CampaignCard({
   }
 
   const avatar = c.photo_url ? (
-    // eslint-disable-next-line @next/next/no-img-element -- remote Supabase Storage URL, fixed small size
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       className="campaign-avatar campaign-avatar-img"
       src={c.photo_url}
@@ -97,46 +275,26 @@ export function CampaignCard({
   );
 
   return (
-    <div className="campaign-card-wrap">
-      {/* Primary action: drafts resume onboarding; complete campaigns enter the app. */}
-      {isDraft ? (
-        <Link
-          href={`/select/new?resume=${c.id}`}
-          className="campaign-card"
-          aria-label={`Resume setup for ${c.candidate}`}
-        >
-          <div className="campaign-card-top">
-            {avatar}
-            <span className="campaign-draft">Draft</span>
-          </div>
-          <div className="campaign-name">{c.candidate}</div>
-          <div className="campaign-meta">
-            <span className="campaign-resume">
-              <PencilLine className="campaign-ico" />
-              Resume setup
-            </span>
-            {date ? (
-              <span className="campaign-meta-row">
-                <CalendarDays className="campaign-ico" />
-                {date}
-              </span>
-            ) : null}
-          </div>
-        </Link>
-      ) : (
-        <form action={selectCampaign.bind(null, c.id)}>
-          <button type="submit" className="campaign-card" aria-label={`Open ${c.candidate}`}>
+    <>
+      {editing && <EditModal campaign={c} onClose={() => setEditing(false)} />}
+
+      <div className="campaign-card-wrap">
+        {isDraft ? (
+          <Link
+            href={`/select/new?resume=${c.id}`}
+            className="campaign-card"
+            aria-label={`Resume setup for ${c.candidate}`}
+          >
             <div className="campaign-card-top">
               {avatar}
+              <span className="campaign-draft">Draft</span>
             </div>
             <div className="campaign-name">{c.candidate}</div>
             <div className="campaign-meta">
-              {meta ? (
-                <span className="campaign-meta-row">
-                  <MapPin className="campaign-ico" />
-                  {meta}
-                </span>
-              ) : null}
+              <span className="campaign-resume">
+                <PencilLine className="campaign-ico" />
+                Resume setup
+              </span>
               {date ? (
                 <span className="campaign-meta-row">
                   <CalendarDays className="campaign-ico" />
@@ -144,69 +302,104 @@ export function CampaignCard({
                 </span>
               ) : null}
             </div>
-          </button>
-        </form>
-      )}
-
-      {/* Delete affordance — owner/director only. Vertical kebab in the UPPER-RIGHT,
-          faint until hover/focus. Sits above the card; all pointer events are
-          stopped so the card's select/resume action never fires. The popover is
-          anchored to the right edge so it stays fully inside the card width. */}
-      {canManage && (
-        <div
-          className={"campaign-menu" + (open ? " open" : "")}
-          ref={menuRef}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="campaign-menu-btn"
-            aria-label={`More actions for ${c.candidate}`}
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            aria-controls={open ? popId : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              setOpen((v) => !v);
-            }}
-          >
-            <MoreVertical aria-hidden />
-          </button>
-          {open && (
-            <div className="campaign-menu-pop" id={popId} role="dialog" aria-label="Delete campaign">
-              <div className="campaign-menu-pop-title">Delete campaign</div>
-              <div className="campaign-menu-pop-sub">removes its voters &amp; turfs</div>
-              <div className="campaign-menu-pop-actions">
-                <button
-                  type="button"
-                  className="btn campaign-menu-cancel"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!deleting) setOpen(false);
-                  }}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn campaign-menu-delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void onDelete();
-                  }}
-                  disabled={deleting}
-                >
-                  {deleting ? <Loader2 className="onb-spin" /> : <Trash2 aria-hidden />}
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
+          </Link>
+        ) : (
+          <form action={selectCampaign.bind(null, c.id)}>
+            <button type="submit" className="campaign-card" aria-label={`Open ${c.candidate}`}>
+              <div className="campaign-card-top">
+                {avatar}
               </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+              <div className="campaign-name">{c.candidate}</div>
+              <div className="campaign-meta">
+                {meta ? (
+                  <span className="campaign-meta-row">
+                    <MapPin className="campaign-ico" />
+                    {meta}
+                  </span>
+                ) : null}
+                {date ? (
+                  <span className="campaign-meta-row">
+                    <CalendarDays className="campaign-ico" />
+                    {date}
+                  </span>
+                ) : null}
+              </div>
+            </button>
+          </form>
+        )}
+
+        {canManage && (
+          <div
+            className={"campaign-menu" + (open ? " open" : "")}
+            ref={menuRef}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="campaign-menu-btn"
+              aria-label={`More actions for ${c.candidate}`}
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              aria-controls={open ? popId : undefined}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setOpen((v) => !v);
+              }}
+            >
+              <MoreVertical aria-hidden />
+            </button>
+
+            {open && !deleting && (
+              <div className="campaign-menu-pop campaign-menu-pop-wide" id={popId} role="dialog" aria-label="Campaign actions">
+                {/* Edit */}
+                <button
+                  type="button"
+                  className="campaign-menu-action"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen(false);
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil style={{ width: 14, height: 14 }} aria-hidden />
+                  Edit campaign
+                </button>
+                <div className="campaign-menu-divider" />
+                {/* Delete confirm */}
+                <div className="campaign-menu-pop-title">Delete campaign</div>
+                <div className="campaign-menu-pop-sub">removes its voters &amp; turfs</div>
+                <div className="campaign-menu-pop-actions">
+                  <button
+                    type="button"
+                    className="btn campaign-menu-cancel"
+                    onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn campaign-menu-delete"
+                    onClick={(e) => { e.stopPropagation(); void onDelete(); }}
+                    disabled={deleting}
+                  >
+                    {deleting ? <Loader2 className="onb-spin" /> : <Trash2 aria-hidden />}
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Show spinner in place of menu while deleting */}
+            {open && deleting && (
+              <div className="campaign-menu-pop" id={popId}>
+                <Loader2 className="onb-spin" style={{ margin: "12px auto", display: "block" }} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

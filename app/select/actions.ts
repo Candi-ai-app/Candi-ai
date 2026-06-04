@@ -77,6 +77,52 @@ export async function deleteCampaign(id: string) {
 }
 
 /**
+ * Update an existing campaign's editable fields (name, office, district, date,
+ * photo). Owners/directors only. Called from the edit modal on campaign cards.
+ */
+export async function updateCampaign(
+  id: string,
+  fields: {
+    candidate?: string;
+    office?: string | null;
+    district?: string | null;
+    election_date?: string | null;
+    photo_url?: string | null;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in" };
+
+  const { data: memberships } = await supabase
+    .from("memberships")
+    .select("role")
+    .eq("user_id", user.id);
+  if (!isAdminRole(highestRole(memberships))) {
+    return { ok: false, error: "Not authorised" };
+  }
+
+  const update: Record<string, unknown> = {};
+  if (fields.candidate !== undefined) update.candidate = fields.candidate || null;
+  if (fields.office !== undefined) update.office = fields.office || null;
+  if (fields.district !== undefined) update.district = fields.district || null;
+  if (fields.election_date !== undefined) update.election_date = fields.election_date || null;
+  if (fields.photo_url !== undefined) update.photo_url = fields.photo_url || null;
+
+  const { error } = await supabase
+    .from("campaigns")
+    .update(update)
+    .eq("id", id);
+
+  if (error) {
+    console.error("updateCampaign:", error.message);
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/select");
+  return { ok: true };
+}
+
+/**
  * Create a new campaign — or finish setting up an existing draft when `id` is
  * provided (resume flow). Owners/directors only. Seeds a realistic sample voter
  * set scoped to the chosen area (only if the campaign has none yet), makes it

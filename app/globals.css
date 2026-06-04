@@ -2330,6 +2330,86 @@ svg.ico { display: block; }
 .campaign-menu-delete:disabled { opacity: 0.6; cursor: not-allowed; }
 .campaign-menu-delete svg { width: 13px; height: 13px; }
 
+/* Wider menu pop for Edit + Delete combined */
+.campaign-menu-pop-wide { width: 240px; }
+/* Edit action row in the menu */
+.campaign-menu-action {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 6px; border: 0; background: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 500; color: var(--ink-2); border-radius: 7px;
+  text-align: left;
+}
+.campaign-menu-action:hover { background: var(--surface-2); color: var(--ink); }
+.campaign-menu-divider { height: 1px; background: var(--hairline); margin: 8px 0; }
+
+/* ── Campaign edit modal ──────────────────────────────────────────────────── */
+.edit-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: oklch(0.12 0.01 250 / 0.54);
+  display: grid; place-items: center;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+.edit-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  width: 100%; max-width: 440px;
+  box-shadow: 0 20px 60px -20px rgba(0,0,0,0.35);
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+}
+.edit-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.edit-modal-title { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.edit-modal-close {
+  display: grid; place-items: center; width: 28px; height: 28px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.edit-modal-close:hover { background: var(--surface-2); color: var(--ink); }
+.edit-modal-body { padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+.edit-modal-foot {
+  padding: 14px 20px;
+  border-top: 1px solid var(--hairline);
+  display: flex; justify-content: flex-end; gap: 10px;
+}
+/* Photo row */
+.edit-modal-photo-row { display: flex; align-items: center; gap: 16px; }
+.edit-modal-photo {
+  position: relative; width: 72px; height: 72px; border-radius: 50%;
+  background: var(--surface-3); border: 2px solid var(--border);
+  display: grid; place-items: center; cursor: pointer; overflow: hidden; flex-shrink: 0;
+}
+.edit-modal-initials { font-size: 22px; font-weight: 650; color: var(--ink-2); }
+.edit-modal-photo-overlay {
+  position: absolute; inset: 0; background: oklch(0.12 0.01 250 / 0.5);
+  display: grid; place-items: center; color: #fff;
+  opacity: 0; transition: opacity 0.15s;
+}
+.edit-modal-photo:hover .edit-modal-photo-overlay { opacity: 1; }
+.edit-modal-photo-btn {
+  font-size: 12.5px; color: var(--accent-deep); font-weight: 550;
+  background: none; border: 0; cursor: pointer; padding: 4px 0; display: block;
+}
+.edit-modal-photo-remove {
+  font-size: 11.5px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 0; display: block;
+}
+.edit-modal-photo-remove:hover { color: var(--rose); }
+/* Form fields */
+.edit-modal-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 550; color: var(--muted); }
+.edit-modal-input {
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); color: var(--ink); font-size: 14px;
+  font-family: var(--f-sans); outline: none; width: 100%;
+}
+.edit-modal-input:focus { border-color: var(--accent-deep); }
+.edit-modal-input:disabled { opacity: 0.6; }
+.edit-modal-error { font-size: 12px; color: var(--rose); background: var(--rose-2,#fff1f2); border-radius: 7px; padding: 7px 10px; }
+
 /* ── Auth / login ─────────────────────────────────────────────────────────── */
 .auth-screen {
   min-height: 100vh;
