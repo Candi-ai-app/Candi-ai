@@ -277,7 +277,12 @@ export async function POST(req: Request) {
   // Require a signed-in user — these endpoints call the paid Anthropic API.
   const userId = await requireUser();
   if (!userId) return new Response("Sign in to use Ask Candi.", { status: 401 });
-  if (rateLimited(userId)) return new Response("You're sending messages too fast — give it a moment.", { status: 429 });
+  // Active campaign (cheap cookie read) is resolved up front so the durable rate
+  // limiter can also enforce a per-campaign daily budget, not just per-user. It's
+  // reused below as the tool context's campaign scope.
+  const campaignId = await getActiveCampaignId();
+  if (await rateLimited(userId, undefined, undefined, campaignId))
+    return new Response("You're sending messages too fast — give it a moment.", { status: 429 });
 
   let messages: Msg[] = [];
   try {
@@ -291,8 +296,7 @@ export async function POST(req: Request) {
     .slice(-20); // keep recent turns; bound the context
   if (!messages.length) return new Response("No message provided.", { status: 400 });
 
-  // Active campaign (RLS-scoped) + the session DB client used by every tool.
-  const campaignId = await getActiveCampaignId();
+  // Session DB client used by every tool (campaignId resolved above).
   const db = await createClient();
   const ctx: ToolCtx = { db, campaignId };
 
@@ -374,7 +378,7 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode("\n\nSorry — I hit an error reaching Candi. Please try again."));
       } finally {
         // Cost monitoring: ONE log line per request, summed across all turns.
-        logUsage("chat", userId, MODEL, totals);
+        logUsage("chat", userId, MODEL, totals, campaignId);
         controller.close();
       }
     },

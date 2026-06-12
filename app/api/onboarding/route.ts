@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
   const userId = await requireUser();
   if (!userId) return Response.json({ error: "Sign in to use auto-fill." }, { status: 401 });
-  if (rateLimited(userId)) return Response.json({ error: "Slow down a moment, then try again." }, { status: 429 });
+  if (await rateLimited(userId)) return Response.json({ error: "Slow down a moment, then try again." }, { status: 429 });
 
   let description = "";
   try {

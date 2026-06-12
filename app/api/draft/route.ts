@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
   const userId = await requireUser();
   if (!userId) return new Response("Sign in to draft messages.", { status: 401 });
-  if (rateLimited(userId)) return new Response("Slow down a moment, then try again.", { status: 429 });
+  if (await rateLimited(userId)) return new Response("Slow down a moment, then try again.", { status: 429 });
 
   let v: VoterCtx = {};
   try {
