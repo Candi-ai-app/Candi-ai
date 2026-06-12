@@ -5,6 +5,7 @@ import { Phone, MessageSquare, Navigation } from "lucide-react";
 import type { FieldTurf, FieldStop } from "@/app/(app)/field/actions";
 import { logDoorContact, pingLocation } from "@/app/(app)/field/actions";
 import type { RouteStop } from "@/app/(app)/canvassing/actions";
+import { campaignGeo } from "@/lib/geo";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -99,10 +100,13 @@ function WalkMap({
   route,
   currentStopIndex,
   doneAddresses,
+  campaignCounty = null,
 }: {
   route: RouteStop[];
   currentStopIndex: number;
   doneAddresses: Set<string>;
+  /** Raw DB county value — used for the fallback map center when the route has no stops. */
+  campaignCounty?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,9 +129,10 @@ function WalkMap({
       mapboxgl.accessToken = TOKEN;
 
       const currentStop = route[currentStopIndex] ?? route[0];
+      const { center: geoCenter } = campaignGeo(campaignCounty);
       const center: [number, number] = currentStop
         ? [currentStop.lng, currentStop.lat]
-        : [-80.2064, 26.1645];
+        : geoCenter;
 
       const map = new mapboxgl.Map({
         container: containerRef.current!,
@@ -422,9 +427,11 @@ function ResultCard({
 function WalkView({
   turf,
   onDone,
+  campaignCounty = null,
 }: {
   turf: FieldTurf;
   onDone: () => void;
+  campaignCounty?: string | null;
 }) {
   const stops = turf.stops;
   const [doneAddresses, setDoneAddresses] = useState<Set<string>>(new Set());
@@ -496,6 +503,7 @@ function WalkView({
         route={turf.route}
         currentStopIndex={currentIdx}
         doneAddresses={doneAddresses}
+        campaignCounty={campaignCounty}
       />
 
       <div className="field-panel">
@@ -595,7 +603,13 @@ function findNextUndone(
 }
 
 // ── Main exported component ───────────────────────────────────────────────────
-export function FieldView({ turfs }: { turfs: FieldTurf[] }) {
+export function FieldView({
+  turfs,
+  campaignCounty = null,
+}: {
+  turfs: FieldTurf[];
+  campaignCounty?: string | null;
+}) {
   const [selectedTurf, setSelectedTurf] = useState<FieldTurf | null>(null);
 
   if (selectedTurf) {
@@ -603,6 +617,7 @@ export function FieldView({ turfs }: { turfs: FieldTurf[] }) {
       <WalkView
         turf={selectedTurf}
         onDone={() => setSelectedTurf(null)}
+        campaignCounty={campaignCounty}
       />
     );
   }

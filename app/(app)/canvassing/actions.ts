@@ -55,7 +55,13 @@ export type CampaignMember = {
   role: string;
 };
 
-export type CanvassingData = { turfs: TurfListItem[]; stats: TurfStats; members: CampaignMember[] };
+export type CanvassingData = {
+  turfs: TurfListItem[];
+  stats: TurfStats;
+  members: CampaignMember[];
+  /** The campaign's county (raw DB value, e.g. "Broward" or "Broward County"). */
+  campaignCounty: string | null;
+};
 
 /** One plottable voter for the turf map (from the voter_points RPC). */
 export type VoterPoint = {
@@ -117,6 +123,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
     turfs: [],
     stats: { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 },
     members: [],
+    campaignCounty: null,
   };
 
   const campaign = await getActiveCampaign();
@@ -207,6 +214,7 @@ export async function getCanvassingData(): Promise<CanvassingData> {
   return {
     turfs,
     members,
+    campaignCounty: campaign.county ?? null,
     stats: {
       activeTurfs: turfs.filter((t) => t.status === "active").length,
       totalTurfs: turfs.length,

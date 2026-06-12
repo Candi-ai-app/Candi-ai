@@ -14,6 +14,7 @@ export default async function CanvassingPage() {
       turfs={canvassing.turfs}
       stats={canvassing.stats}
       members={canvassing.members}
+      campaignCounty={canvassing.campaignCounty}
     />
   );
 }

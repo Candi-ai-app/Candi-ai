@@ -19,6 +19,7 @@ import {
   type PrecinctStat,
 } from "@/app/(app)/canvassing/actions";
 import { voteCount, MAX_M, type VoteHistoryMap } from "@/lib/elections";
+import { campaignGeo, countyPrecinctAsset, countyLabel } from "@/lib/geo";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -34,8 +35,9 @@ const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const PARTY_COLOR: Record<string, string> = { D: "#6366f1", R: "#f43f5e", I: "#94a3b8" };
 type Party = "D" | "R" | "I";
 
-// ── Precinct boundary overlay (official Broward 2026 layer, static asset) ────
-const PRECINCTS_URL = "/geo/broward-precincts-2026.json";
+// ── Precinct boundary overlay (county-aware static asset) ────────────────────
+// The asset URL is derived at runtime from the campaign county via countyPrecinctAsset().
+// PRECINCTS_URL is removed; use precinctsUrlRef instead (set in TurfMap from the prop).
 const PRECINCT_SRC = "precincts";
 const PRECINCT_LAYERS = ["precinct-fill", "precinct-line", "precinct-labels"] as const;
 const PRECINCT_LINE = "#64748b";  // muted slate — readable on light AND satellite
@@ -267,12 +269,15 @@ export type TurfMapControls = {
 export function TurfMap({
   voterPoints = [],
   selectedTurfId = null,
+  campaignCounty = null,
   onReady,
   onTurfClick,
 }: {
   voterPoints?: VoterPoint[];
   /** Turf selected in the sidebar — highlighted on the map. */
   selectedTurfId?: string | null;
+  /** Raw DB county value ("Broward", "Broward County", etc.) — drives map center + precinct asset. */
+  campaignCounty?: string | null;
   onReady?: (controls: TurfMapControls) => void;
   /** Called when the user clicks a saved-turf polygon on the map. */
   onTurfClick?: (id: string) => void;
@@ -282,6 +287,19 @@ export function TurfMap({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
   const didFitRef = useRef(false);
+
+  // ── County-derived map geography ─────────────────────────────────────────────
+  // Computed once from the county prop. The precinct asset URL is null when no
+  // GeoJSON file is deployed for this county — the Precincts toggle is hidden
+  // in that case so we never attempt to fetch a missing file.
+  const { center: mapCenter, zoom: mapZoom } = campaignGeo(campaignCounty);
+  const precinctsUrl = countyPrecinctAsset(campaignCounty);
+  const precinctsAvailable = precinctsUrl !== null;
+  const precinctsLabel = `Show ${countyLabel(campaignCounty)} precinct boundaries`;
+  // Stable ref so the fetch callback (inside map.on("load")) always reads the
+  // current URL without a stale closure.
+  const precinctsUrlRef = useRef(precinctsUrl);
+  precinctsUrlRef.current = precinctsUrl;
 
   const [saved, setSaved] = useState<SavedTurf[]>([]);
   const [styleUrl, setStyleUrl] = useState<string>(STYLES[0].url);
@@ -426,7 +444,9 @@ export function TurfMap({
 
   const togglePrecincts = () => {
     const map = mapRef.current;
-    if (!map) return;
+    // If no precinct asset is deployed for this county, ignore clicks.
+    const url = precinctsUrlRef.current;
+    if (!map || !url) return;
     const next = !precinctsOnRef.current;
     precinctsOnRef.current = next;
     setPrecinctsOn(next);
@@ -445,7 +465,7 @@ export function TurfMap({
       else map.once("idle", show);
       return;
     }
-    fetch(PRECINCTS_URL)
+    fetch(url)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((fc: GeoJSON.FeatureCollection) => {
         precinctFCRef.current = fc;
@@ -523,8 +543,8 @@ export function TurfMap({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: STYLES[0].url,
-      center: [-80.2064, 26.1645],
-      zoom: 11,
+      center: mapCenter,
+      zoom: mapZoom,
       attributionControl: false,
     });
     mapRef.current = map;
@@ -848,11 +868,13 @@ export function TurfMap({
           >{s.label}</button>
         ))}
         <span className="map-switcher-divider" aria-hidden="true" />
-        <button type="button"
-          className={"map-switcher-btn" + (precinctsOn ? " active" : "")}
-          aria-pressed={precinctsOn} onClick={togglePrecincts}
-          title="Show official Broward precinct boundaries (2026)"
-        >Precincts</button>
+        {precinctsAvailable && (
+          <button type="button"
+            className={"map-switcher-btn" + (precinctsOn ? " active" : "")}
+            aria-pressed={precinctsOn} onClick={togglePrecincts}
+            title={precinctsLabel}
+          >Precincts</button>
+        )}
       </div>
 
       {/* Legend */}

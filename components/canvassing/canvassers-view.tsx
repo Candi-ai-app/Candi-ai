@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DoorOpen, Route, MapPin, Navigation, ChevronDown, Users } from "lucide-react";
 import type { TurfListItem, CampaignMember, CanvasserLocation } from "@/app/(app)/canvassing/actions";
 import { assignTurf, getCanvasserLocations } from "@/app/(app)/canvassing/actions";
+import { campaignGeo } from "@/lib/geo";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -30,9 +31,12 @@ const STATUS_LABEL: Record<CanvasserLocation["status"], string> = {
 function CanvasserLiveMap({
   locations,
   nameById,
+  campaignCounty = null,
 }: {
   locations: CanvasserLocation[];
   nameById: Map<string, string>;
+  /** Raw DB county value — used for the fallback map center when no canvassers are live. */
+  campaignCounty?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,12 +51,13 @@ function CanvasserLiveMap({
       import("mapbox-gl/dist/mapbox-gl.css");
       mapboxgl.accessToken = TOKEN;
       const first = locations[0];
-      const center: [number, number] = first ? [first.lng, first.lat] : [-80.13, 26.30];
+      const { center: geoCenter, zoom: geoZoom } = campaignGeo(campaignCounty);
+      const center: [number, number] = first ? [first.lng, first.lat] : geoCenter;
       const map = new mapboxgl.Map({
         container: containerRef.current!,
         style: "mapbox://styles/mapbox/light-v11",
         center,
-        zoom: 12,
+        zoom: first ? 12 : geoZoom,
         attributionControl: false,
       });
       mapRef.current = map;
@@ -108,9 +113,11 @@ function CanvasserLiveMap({
 export function CanvassersView({
   turfs,
   members,
+  campaignCounty = null,
 }: {
   turfs: TurfListItem[];
   members: CampaignMember[];
+  campaignCounty?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -161,7 +168,7 @@ export function CanvassersView({
           <span className="canv-live-dot active" /> {liveCount} active now · {locations.length} tracked
         </span>
       </div>
-      <CanvasserLiveMap locations={locations} nameById={nameById} />
+      <CanvasserLiveMap locations={locations} nameById={nameById} campaignCounty={campaignCounty} />
 
       {roster.length === 0 ? (
         <div className="turf-empty" style={{ maxWidth: 420, margin: "40px auto" }}>

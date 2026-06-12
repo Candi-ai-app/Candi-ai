@@ -41,11 +41,13 @@ export function TurfView({
   turfs = [],
   stats,
   members = [],
+  campaignCounty = null,
 }: {
   voterPoints?: VoterPoint[];
   turfs?: TurfListItem[];
   stats?: TurfStats;
   members?: CampaignMember[];
+  campaignCounty?: string | null;
 }) {
   const hdr = stats ?? { activeTurfs: 0, totalTurfs: 0, canvassers: 0, doorsToday: 0 };
 
@@ -293,6 +295,7 @@ export function TurfView({
           <TurfMap
             voterPoints={voterPoints}
             selectedTurfId={selId}
+            campaignCounty={campaignCounty}
             onReady={handleMapReady}
             onTurfClick={(id) => setSelId((cur) => (cur === id ? null : id))}
           />
@@ -304,7 +307,7 @@ export function TurfView({
           )}
         </div>
       ) : (
-        <CanvassersView turfs={turfs} members={members} />
+        <CanvassersView turfs={turfs} members={members} campaignCounty={campaignCounty} />
       )}
     </div>
   );
