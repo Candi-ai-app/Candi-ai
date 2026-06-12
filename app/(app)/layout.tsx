@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { MobileNav } from "@/components/mobile-nav";
+import { Tutorial } from "@/components/onboarding/tutorial";
 import { createClient } from "@/utils/supabase/server";
 import { getActiveCampaign } from "@/lib/campaign";
 import { highestRole } from "@/lib/auth";
@@ -52,6 +53,8 @@ export default async function AppLayout({
       <Topbar />
       <main className="canvas">{children}</main>
       <MobileNav role={role} />
+      {/* First-run tutorial: localStorage-gated, invisible to returning users */}
+      <Tutorial />
     </div>
   );
 }
