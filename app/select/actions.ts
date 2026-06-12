@@ -5,8 +5,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { CAMPAIGN_COOKIE } from "@/lib/campaign";
-import { highestRole, isAdminRole } from "@/lib/auth";
-import { findArea, stateAbbr, SAMPLE_VOTER_COUNT, type AreaCounty } from "@/lib/areas";
+import { isAdminRole } from "@/lib/auth";
+import { findArea, stateAbbr, SAMPLE_VOTER_COUNT } from "@/lib/areas";
+
+// The concrete client type, inferred from createClient() so the helper below
+// stays in lockstep with whatever @supabase/ssr returns (no hand-written generics).
+type DbClient = Awaited<ReturnType<typeof createClient>>;
 
 const COOKIE_OPTS = {
   httpOnly: true as const,
@@ -16,6 +20,40 @@ const COOKIE_OPTS = {
   // ~1 year — long-lived selection; cleared on sign-out.
   maxAge: 60 * 60 * 24 * 365,
 };
+
+/**
+ * The signed-in user's role IN THE ORG that owns `campaignId` — the org-scoped
+ * permission check the consultant model requires. A user who is owner in org A
+ * but only a canvasser in org B must NOT get owner powers over org B's
+ * campaigns, so we resolve the campaign's own org and read the user's membership
+ * THERE — never their highest role across all orgs.
+ *
+ * Returns "canvasser" (least privilege) when the campaign can't be read (RLS:
+ * the user isn't in its org) or the user has no membership row in that org.
+ * Defense-in-depth: RLS independently scopes the subsequent write.
+ */
+async function roleInCampaignOrg(
+  supabase: DbClient,
+  userId: string,
+  campaignId: string
+): Promise<string> {
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("org_id")
+    .eq("id", campaignId)
+    .maybeSingle();
+  const orgId = (campaign?.org_id as string | undefined) ?? null;
+  if (!orgId) return "canvasser";
+
+  // (user_id, org_id) is unique → at most one row; maybeSingle() is exact.
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  return (membership?.role as string | undefined) ?? "canvasser";
+}
 
 /** Select a campaign the user can access and make it active. */
 export async function selectCampaign(id: string) {
@@ -48,14 +86,13 @@ export async function deleteCampaign(id: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Owners/directors only. A user can belong to multiple orgs, so fetch ALL
-  // memberships and take the highest role — `.maybeSingle()` errors on 2+ rows,
-  // which was silently dropping every delete to a canvasser no-op.
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("user_id", user.id);
-  if (!isAdminRole(highestRole(memberships))) {
+  // Owners/directors only, scoped to the TARGET campaign's org. A user can be
+  // owner in one org and canvasser in another, so we must check their role in
+  // THIS campaign's org — not their highest role anywhere. Fetch the campaign
+  // first (RLS scopes to the user's orgs) to learn its org_id; a missing row
+  // (no access) denies.
+  const role = await roleInCampaignOrg(supabase, user.id, id);
+  if (!isAdminRole(role)) {
     revalidatePath("/select");
     return;
   }
@@ -94,11 +131,10 @@ export async function updateCampaign(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in" };
 
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("user_id", user.id);
-  if (!isAdminRole(highestRole(memberships))) {
+  // Org-scoped role check against the TARGET campaign's org (see deleteCampaign).
+  // Owner-in-another-org does NOT grant edit rights here.
+  const role = await roleInCampaignOrg(supabase, user.id, id);
+  if (!isAdminRole(role)) {
     return { ok: false, error: "Not authorised" };
   }
 
@@ -128,7 +164,10 @@ export async function updateCampaign(
  * set scoped to the chosen area (only if the campaign has none yet), makes it
  * active, and goes to the dashboard.
  */
-export async function createCampaign(formData: FormData) {
+export async function createCampaign(
+  formData: FormData,
+  orgId?: string
+): Promise<void | { ok: false; error: string }> {
   const id = String(formData.get("id") ?? "").trim(); // present → resume/update
   const candidate = String(formData.get("candidate") ?? "").trim();
   const office = String(formData.get("office") ?? "").trim();
@@ -137,6 +176,9 @@ export async function createCampaign(formData: FormData) {
   const district = String(formData.get("district") ?? "").trim();
   const electionDate = String(formData.get("election_date") ?? "").trim();
   const photoUrl = String(formData.get("photo_url") ?? "").trim();
+  // Allow the chosen org to arrive either as an argument or in the form, so a
+  // future workspace picker can submit it without changing this signature.
+  const chosenOrgId = (orgId ?? String(formData.get("org_id") ?? "")).trim();
 
   const back = id ? `/select/new?resume=${id}` : "/select/new";
   if (!candidate) redirect(back);
@@ -147,17 +189,38 @@ export async function createCampaign(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Only owners/directors may create campaigns. Pick the first org where the
-  // user holds one of those roles (sufficient for the demo).
-  const { data: membership } = await supabase
+  // Only owners/directors may create campaigns. Resolve WHICH org to attach to,
+  // org-scoped: fetch every org where the user is owner/director (capped — a user
+  // won't be in thousands of orgs) and pick deterministically.
+  const { data: eligibleOrgs } = await supabase
     .from("memberships")
     .select("org_id, role")
     .eq("user_id", user.id)
     .in("role", ["owner", "director"])
-    .limit(1)
-    .maybeSingle();
+    .limit(1000);
 
-  if (!membership) redirect("/select");
+  const eligible = (eligibleOrgs ?? []) as { org_id: string; role: string }[];
+  if (eligible.length === 0) redirect("/select");
+
+  let targetOrgId: string;
+  if (chosenOrgId) {
+    // An org was chosen — honor it ONLY if the user is owner/director there.
+    // This is the privilege-escalation guard: a canvasser-in-org-X cannot pass
+    // org X here and have a campaign created under it.
+    if (!eligible.some((m) => m.org_id === chosenOrgId)) {
+      return { ok: false, error: "Not authorised for that workspace" };
+    }
+    targetOrgId = chosenOrgId;
+  } else if (eligible.length === 1) {
+    // Exactly one eligible org (every current demo user + new personal-org
+    // signups) — unambiguous, attach there. Unchanged behavior.
+    targetOrgId = eligible[0].org_id;
+  } else {
+    // Multiple eligible orgs and none chosen — refuse rather than silently
+    // attaching to an arbitrary one. The caller can re-submit with org_id once a
+    // picker exists; today it voids the result, so the user safely stays put.
+    return { ok: false, error: "Multiple workspaces — choose one" };
+  }
 
   // Stable shape (no conditional keys) so the Supabase client types resolve
   // cleanly. photo_url is null when no photo was provided.
@@ -191,7 +254,7 @@ export async function createCampaign(formData: FormData) {
   } else {
     const { data: created, error } = await supabase
       .from("campaigns")
-      .insert({ org_id: membership.org_id as string, ...fields })
+      .insert({ org_id: targetOrgId, ...fields })
       .select("id")
       .single();
     if (error || !created) {
@@ -245,14 +308,9 @@ const LAST = [
   "Okafor", "Romano", "Bauer", "Singh", "Hughes", "Lozano", "Foster", "Khan", "Berg", "Ali",
   "Tucker", "Mercer", "Vance", "Ortiz", "Hale", "Henderson", "Whitfield", "Raman", "Bell", "Park",
 ];
-// Generic fallback if a campaign is created without a recognized area.
-const FALLBACK: Pick<AreaCounty, "city" | "zips" | "precincts" | "bbox" | "streets"> = {
-  city: "Springfield",
-  zips: ["00001", "00002", "00003"],
-  precincts: ["01A", "02B", "03C", "04D", "05E", "06F"],
-  bbox: [-98.6, 39.7, -98.4, 39.9],
-  streets: ["Main St", "Oak Ave", "Elm St", "Park Ave", "1st St", "Maple Dr", "Washington Ave", "Lincoln St"],
-};
+// NOTE: no synthetic fallback area. For an UNKNOWN state/county we skip seeding
+// entirely (see buildSampleVoters) rather than invent "Springfield"/zip 00001
+// voters, which produced geographically incoherent sample data.
 
 function mulberry32(seed: number) {
   return function () {
@@ -297,7 +355,11 @@ type VoterRow = {
 };
 
 function buildSampleVoters(campaignId: string, stateName: string, county: string): VoterRow[] {
-  const area = findArea(stateName, county) ?? FALLBACK;
+  // Unknown area → no coherent geography to place voters in, so seed nothing.
+  // Known FL/PA areas (lib/areas.ts) seed as before. The campaign is still
+  // created; it just starts with zero sample voters.
+  const area = findArea(stateName, county);
+  if (!area) return [];
   const abbr = stateAbbr(stateName) || null;
   const [west, south, east, north] = area.bbox;
   const rng = mulberry32(hashSeed(campaignId));
