@@ -35,12 +35,16 @@ type ContactRow = {
 };
 
 export default async function HQPage() {
-  // HQ is the campaign command center — owners/directors only.
-  if (!isAdminRole(await getRole())) redirect("/canvassing");
-
   const supabase = await createClient();
   const campaign = await getActiveCampaign();
   const campaignId = (await getActiveCampaignId()) ?? "default";
+
+  // HQ is the campaign command center — owners/directors only. Scope the role
+  // check to the active campaign's org so an owner-in-A who is a canvasser-in-B
+  // gets the field-only experience on B. No active campaign → fall back to the
+  // unscoped (highest-role) check, preserving prior behavior.
+  const role = await getRole(campaign ? { campaignId: campaign.id } : undefined);
+  if (!isAdminRole(role)) redirect("/canvassing");
 
   // ── Live aggregates, all RLS-scoped to the active campaign ──────────────────
   // Run the independent reads in parallel.

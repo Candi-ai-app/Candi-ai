@@ -39,17 +39,38 @@ export type ResumeDraft = {
 
 const STEPS = ["Basics", "Area", "Review"] as const;
 
+/** An org the user may create a campaign in (owner/director), with a label. */
+export type EligibleOrg = { id: string; name: string };
+
 export function CampaignOnboarding({
   areas,
   sampleCount,
   draft = null,
+  eligibleOrgs = [],
 }: {
   areas: AreaState[];
   sampleCount: number;
   /** When present, prefill + UPDATE this draft instead of creating a new one. */
   draft?: ResumeDraft | null;
+  /**
+   * Orgs the user may create this campaign in. 0 or 1 → no picker (single-org is
+   * the common case and shows zero new UI). 2+ → a "Workspace" select is shown
+   * and the chosen org_id is posted with the form.
+   */
+  eligibleOrgs?: EligibleOrg[];
 }) {
   const [step, setStep] = useState(0);
+
+  // Which workspace to create the campaign in. With a single eligible org we
+  // preselect it (the server would pick it anyway); with several it starts
+  // empty so the user must choose. Only surfaced in the UI when 2+ exist.
+  const [orgId, setOrgId] = useState(eligibleOrgs.length === 1 ? eligibleOrgs[0].id : "");
+  const multiOrg = eligibleOrgs.length > 1;
+
+  // Error returned by createCampaign (e.g. "Multiple workspaces — choose one",
+  // "Not authorised for that workspace"). On success the action redirects, so
+  // this only ever holds a real failure.
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Form fields — prefilled from the draft when resuming.
   const [candidate, setCandidate] = useState(draft?.candidate ?? "");
@@ -230,12 +251,22 @@ export function CampaignOnboarding({
     }
   }
 
-  const canNext0 = candidate.trim().length > 0;
+  // Step 0 is complete once the required candidate name is set — and, for
+  // multi-org users, once a workspace is chosen (so the picker can't be skipped).
+  const canNext0 = candidate.trim().length > 0 && (!multiOrg || !!orgId);
   const stateObj = areas.find((a) => a.state === state);
   const willSeed = Boolean(stateObj); // we can place voters once a known state is chosen
 
   function submit() {
     if (submitting) return;
+    // Guard the only client-side precondition for the picker: a multi-org user
+    // must choose a workspace. (The server enforces this too — this is just a
+    // friendlier inline message before the round-trip.)
+    if (multiOrg && !orgId) {
+      setSubmitError("Choose a workspace for this campaign.");
+      return;
+    }
+    setSubmitError(null);
     startSubmit(async () => {
       // Upload the photo (if any) before the action runs — the action redirects,
       // so we can't do client work after it. Failure is non-blocking.
@@ -249,8 +280,15 @@ export function CampaignOnboarding({
       fd.set("district", district);
       fd.set("election_date", electionDate);
       if (url) fd.set("photo_url", url);
-      // createCampaign seeds voters (if none yet) then redirects to "/".
-      void createCampaign(fd);
+      // The chosen workspace. createCampaign reads org_id from the FormData and
+      // verifies the user is owner/director there; it picks the lone org itself
+      // when only one is eligible, so sending it for the single-org case is safe.
+      if (orgId) fd.set("org_id", orgId);
+      // createCampaign seeds voters (if none yet) then redirects to "/" on
+      // success (the redirect throws NEXT_REDIRECT, which propagates past this
+      // await). It only RETURNS a value on failure — surface that inline.
+      const res = await createCampaign(fd);
+      if (res && !res.ok) setSubmitError(res.error);
     });
   }
 
@@ -287,6 +325,29 @@ export function CampaignOnboarding({
           {/* ── Step 1: Basics + AI assist ─────────────────────────────── */}
           {step === 0 && (
             <div className="onb-fields">
+              {/* Workspace picker — only for users who are owner/director in more
+                  than one org. Single-org users see nothing here (zero change). */}
+              {multiOrg && (
+                <Field label="Workspace" required htmlFor="onb-org">
+                  <select
+                    id="onb-org"
+                    className="scr-input onb-select"
+                    value={orgId}
+                    onChange={(e) => {
+                      setOrgId(e.target.value);
+                      setSubmitError(null);
+                    }}
+                  >
+                    <option value="">Select a workspace…</option>
+                    {eligibleOrgs.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name || "Untitled workspace"}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
               <div className="onb-ai">
                 <label className="onb-label" htmlFor="onb-describe">
                   <Sparkles className="onb-label-ico" />
@@ -522,6 +583,14 @@ export function CampaignOnboarding({
                   </>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Submit error (e.g. workspace not chosen / not authorised). Reuses the
+              same rose error pill the edit-campaign modal uses for action errors. */}
+          {submitError && (
+            <div className="edit-modal-error" role="alert" style={{ marginTop: 14 }}>
+              ⚠ {submitError}
             </div>
           )}
 
