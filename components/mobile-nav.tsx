@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Map, Navigation, FileText, GitBranch, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, UsersRound, Map, Navigation, FileText, GitBranch, MessageSquare } from "lucide-react";
 
 const ITEMS = [
   { label: "HQ",      href: "/",           icon: LayoutDashboard, comingSoon: false },
@@ -10,6 +10,8 @@ const ITEMS = [
   { label: "Turf",    href: "/canvassing",  icon: Map,             comingSoon: false },
   { label: "Field",   href: "/field",       icon: Navigation,      comingSoon: false },
   { label: "Forms",   href: "/forms",       icon: FileText,        comingSoon: false },
+  // Team is admin-only — canvassers never see it (CANVASSER_HREFS whitelist below).
+  { label: "Team",    href: "/team",        icon: UsersRound,      comingSoon: false },
   // Scripts + Texting are greyed out in the desktop nav — hidden on mobile until ready.
   { label: "Scripts", href: "/scripts",     icon: GitBranch,       comingSoon: true },
   { label: "Texts",   href: "/texting",     icon: MessageSquare,   comingSoon: true },

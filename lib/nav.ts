@@ -37,6 +37,10 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "Canvassing", href: "/canvassing", icon: Map },
   { label: "Field", href: "/field", icon: Navigation },
   { label: "Forms", href: "/forms", icon: FileText },
+  // Admin surface — canvassers never see this entry (the sidebar/mobile nav
+  // whitelist via CANVASSER_HREFS excludes it) and the page itself re-checks
+  // the org-scoped role server-side.
+  { label: "Team", href: "/team", icon: Users },
   { label: "Scripts", href: "/scripts", icon: GitBranch, comingSoon: true },
   { label: "Texting", href: "/texting", icon: MessageSquare, comingSoon: true },
 ];
@@ -57,6 +61,7 @@ export const CRUMBS: Record<string, string> = {
   "/canvassing": "Canvassing",
   "/field": "Field",
   "/forms": "Forms",
+  "/team": "Team",
   "/scripts": "Scripts",
   "/texting": "Texting",
 };
