@@ -412,6 +412,37 @@ export async function deleteTurfs(
   return { ok: true, deleted: count ?? ids.length };
 }
 
+/** Per-precinct voter + supporter counts for the precinct map overlay. */
+export type PrecinctStat = {
+  /** 2026 Broward precinct code (matches the GeoJSON PRECINCT property). */
+  precinct: string;
+  voters: number;
+  /** Voters scored 4–5 — the same "Supporters ID'd" definition HQ uses. */
+  supporters: number;
+};
+
+/**
+ * Voter + supporter counts grouped by precinct for the active campaign, via the
+ * precinct_stats RPC (aggregating in SQL sidesteps supabase-js's 1000-row select
+ * cap). SECURITY DEFINER but RLS-equivalent, like voter_points: rows only come
+ * back when the caller belongs to the campaign (user_campaign_ids check). The
+ * RPC also normalizes SoE precinct codes onto the 2026 boundary codes (split
+ * suffixes like "K002.1" → K002; retired pre-2026 codes via the county's
+ * renumber crosswalk, e.g. K008 → K001), so the client can join the result
+ * straight onto the GeoJSON PRECINCT property.
+ */
+export async function getPrecinctStats(): Promise<PrecinctStat[]> {
+  const campaignId = await getActiveCampaignId();
+  if (!campaignId) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("precinct_stats", { p_campaign: campaignId });
+  if (error) {
+    console.error("getPrecinctStats:", error.message);
+    return [];
+  }
+  return (data ?? []) as PrecinctStat[];
+}
+
 /** A canvasser's live position + today's progress, for the owner's Canvassers map. */
 export type CanvasserLocation = {
   membershipId: string;

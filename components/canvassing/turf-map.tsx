@@ -11,10 +11,12 @@ import {
   listTurfs,
   setTurfRoute,
   splitTurf,
+  getPrecinctStats,
   type SavedTurf,
   type GeoPolygon,
   type VoterPoint,
   type RouteStop,
+  type PrecinctStat,
 } from "@/app/(app)/canvassing/actions";
 import { voteCount, MAX_M, type VoteHistoryMap } from "@/lib/elections";
 
@@ -31,6 +33,14 @@ const STYLES = [
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
 const PARTY_COLOR: Record<string, string> = { D: "#6366f1", R: "#f43f5e", I: "#94a3b8" };
 type Party = "D" | "R" | "I";
+
+// ── Precinct boundary overlay (official Broward 2026 layer, static asset) ────
+const PRECINCTS_URL = "/geo/broward-precincts-2026.json";
+const PRECINCT_SRC = "precincts";
+const PRECINCT_LAYERS = ["precinct-fill", "precinct-line", "precinct-labels"] as const;
+const PRECINCT_LINE = "#64748b";  // muted slate — readable on light AND satellite
+const PRECINCT_TINT = "#6366f1";  // hover tint (same indigo as the D dots)
+const PRECINCT_LABEL = "#475569";
 
 function turfFeatures(turfs: SavedTurf[]) {
   return {
@@ -279,6 +289,17 @@ export function TurfMap({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [filterVisible, setFilterVisible] = useState(true);
 
+  // Precinct overlay (default OFF). Map callbacks read refs, not state, so the
+  // once-registered handlers and addLayers never see stale closures.
+  const [precinctsOn, setPrecinctsOn] = useState(false);
+  const precinctsOnRef = useRef(false);
+  const precinctFCRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const precinctStatsRef = useRef<Map<string, PrecinctStat> | null>(null);
+  const precinctStatsReqRef = useRef<Promise<void> | null>(null);
+  const precinctPopupRef = useRef<mapboxgl.Popup | null>(null);
+  const openPrecinctRef = useRef<{ code: string; lngLat: mapboxgl.LngLat } | null>(null);
+  const hoverPrecinctRef = useRef<string | number | null>(null);
+
   // Filter state
   const [party, setParty] = useState<Record<Party, boolean>>({ D: true, R: true, I: true });
   const [svOn, setSvOn] = useState(false);
@@ -319,6 +340,124 @@ export function TurfMap({
     (mapRef.current?.getSource("saved-turfs") as mapboxgl.GeoJSONSource | undefined)
       ?.setData(turfFeatures(turfs));
     return turfs;
+  };
+
+  // ── Precinct overlay helpers ────────────────────────────────────────────────
+  /** Idempotently (re-)add the precinct source + fill/line/label layers. Fill
+   *  and line slot UNDER the saved turfs so turf/voter interactions keep their
+   *  visual priority; labels render on top. Safe to call after a basemap style
+   *  switch (the same re-add path voter points use). */
+  const addPrecinctLayers = (map: mapboxgl.Map) => {
+    const fc = precinctFCRef.current;
+    if (!fc) return;
+    if (!map.getSource(PRECINCT_SRC)) {
+      // promoteId keys feature-state (hover) off the precinct code directly.
+      map.addSource(PRECINCT_SRC, { type: "geojson", data: fc, promoteId: "PRECINCT" });
+    }
+    if (map.getLayer("precinct-fill")) return;
+    const under = map.getLayer("saved-fill") ? "saved-fill" : undefined;
+    // Near-transparent fill so clicks register; subtle accent tint on hover.
+    map.addLayer({ id: "precinct-fill", type: "fill", source: PRECINCT_SRC,
+      paint: {
+        "fill-color": PRECINCT_TINT,
+        "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.13, 0.02],
+      } }, under);
+    map.addLayer({ id: "precinct-line", type: "line", source: PRECINCT_SRC,
+      paint: { "line-color": PRECINCT_LINE, "line-width": 1, "line-opacity": 0.8 } }, under);
+    map.addLayer({ id: "precinct-labels", type: "symbol", source: PRECINCT_SRC,
+      minzoom: 10.5,
+      layout: {
+        "text-field": ["get", "PRECINCT"],
+        "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10.5, 10, 14, 12.5],
+        "text-letter-spacing": 0.05,
+      },
+      paint: {
+        "text-color": PRECINCT_LABEL,
+        "text-halo-color": "rgba(255,255,255,0.92)",
+        "text-halo-width": 1.2,
+      } });
+  };
+
+  const setPrecinctVisibility = (map: mapboxgl.Map, on: boolean) => {
+    for (const id of PRECINCT_LAYERS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    }
+  };
+
+  /** Open (or refresh in place) the precinct popup. Re-invoked once stats load. */
+  const renderPrecinctPopup = (map: mapboxgl.Map, code: string, lngLat: mapboxgl.LngLat) => {
+    const stats = precinctStatsRef.current;
+    const row = stats?.get(code);
+    const statsLine = stats
+      ? `<span class="precinct-pop-n">${(row?.voters ?? 0).toLocaleString()}</span> voters` +
+        `<span class="precinct-pop-dot">·</span>` +
+        `<span class="precinct-pop-n">${(row?.supporters ?? 0).toLocaleString()}</span> supporters`
+      : "Loading stats…";
+    const html =
+      `<div class="voter-pop-name">Precinct ${escapeHtml(code)}</div>` +
+      `<div class="precinct-pop-stats">${statsLine}</div>`;
+    if (!precinctPopupRef.current) {
+      precinctPopupRef.current = new mapboxgl.Popup({
+        closeButton: false, offset: 8, maxWidth: "240px", className: "voter-pop precinct-pop",
+      });
+      precinctPopupRef.current.on("close", () => { openPrecinctRef.current = null; });
+    }
+    precinctPopupRef.current.setLngLat(lngLat).setHTML(html).addTo(map);
+    openPrecinctRef.current = { code, lngLat };
+  };
+
+  /** Fetch per-precinct voter/supporter stats once (first toggle-on). */
+  const ensurePrecinctStats = () => {
+    if (precinctStatsReqRef.current) return;
+    precinctStatsReqRef.current = getPrecinctStats()
+      .then((rows) => {
+        precinctStatsRef.current = new Map(rows.map((r) => [r.precinct, r]));
+        // If a popup opened while stats were in flight, refresh it in place.
+        const open = openPrecinctRef.current;
+        const map = mapRef.current;
+        if (open && map) renderPrecinctPopup(map, open.code, open.lngLat);
+      })
+      .catch((err) => {
+        console.error("precinct stats:", err);
+        precinctStatsReqRef.current = null; // allow a retry on the next toggle
+      });
+  };
+
+  const togglePrecincts = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const next = !precinctsOnRef.current;
+    precinctsOnRef.current = next;
+    setPrecinctsOn(next);
+    if (!next) {
+      precinctPopupRef.current?.remove();
+      setPrecinctVisibility(map, false);
+      return;
+    }
+    ensurePrecinctStats();
+    const show = () => {
+      addPrecinctLayers(map);
+      setPrecinctVisibility(map, true);
+    };
+    if (precinctFCRef.current) {
+      if (map.isStyleLoaded()) show();
+      else map.once("idle", show);
+      return;
+    }
+    fetch(PRECINCTS_URL)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((fc: GeoJSON.FeatureCollection) => {
+        precinctFCRef.current = fc;
+        if (!precinctsOnRef.current) return; // toggled back off while loading
+        if (map.isStyleLoaded()) show();
+        else map.once("idle", show);
+      })
+      .catch((err) => {
+        console.error("precinct boundaries:", err);
+        precinctsOnRef.current = false;
+        setPrecinctsOn(false);
+      });
   };
 
   const addLayers = (map: mapboxgl.Map) => {
@@ -370,6 +509,9 @@ export function TurfMap({
     }
     (map.getSource("voter-points") as mapboxgl.GeoJSONSource | undefined)
       ?.setData(pointFeatures(filteredRef.current));
+    // Precinct overlay survives basemap style switches the same way voter
+    // points do: addLayers re-adds the source + layers while the toggle is on.
+    if (precinctsOnRef.current) addPrecinctLayers(map);
     void refresh();
   };
 
@@ -444,6 +586,33 @@ export function TurfMap({
       map.on("click", "voter-circles", (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         if (id) router.push(`/voters?v=${encodeURIComponent(id)}`);
+      });
+
+      // ── Precinct overlay interactions ─────────────────────────────────────
+      // Registered up front even though the layers are created lazily on first
+      // toggle — layer-scoped handlers only fire once the layer exists, and
+      // hidden layers produce no events, so the toggle gates everything.
+      map.on("mousemove", "precinct-fill", (e) => {
+        const id = e.features?.[0]?.id;
+        if (id == null || id === hoverPrecinctRef.current) return;
+        if (hoverPrecinctRef.current != null) {
+          map.setFeatureState({ source: PRECINCT_SRC, id: hoverPrecinctRef.current }, { hover: false });
+        }
+        hoverPrecinctRef.current = id;
+        map.setFeatureState({ source: PRECINCT_SRC, id }, { hover: true });
+      });
+      map.on("mouseleave", "precinct-fill", () => {
+        if (hoverPrecinctRef.current != null) {
+          map.setFeatureState({ source: PRECINCT_SRC, id: hoverPrecinctRef.current }, { hover: false });
+        }
+        hoverPrecinctRef.current = null;
+      });
+      map.on("click", "precinct-fill", (e) => {
+        // Voter dots and saved turfs keep click priority over the precinct popup.
+        const busy = ["voter-circles", "saved-fill"].filter((l) => map.getLayer(l));
+        if (busy.length && map.queryRenderedFeatures(e.point, { layers: busy }).length > 0) return;
+        const code = e.features?.[0]?.properties?.PRECINCT as string | undefined;
+        if (code) renderPrecinctPopup(map, code, e.lngLat);
       });
     });
 
@@ -539,9 +708,12 @@ export function TurfMap({
     });
 
     return () => {
-      map.remove();
+      map.remove(); // also tears down any open precinct popup
       mapRef.current = null;
       didFitRef.current = false;
+      precinctPopupRef.current = null;
+      openPrecinctRef.current = null;
+      hoverPrecinctRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -667,7 +839,7 @@ export function TurfMap({
         </label>
       </div>
 
-      {/* Style switcher */}
+      {/* Style switcher + overlay toggles */}
       <div className="map-switcher">
         {STYLES.map((s) => (
           <button key={s.url} type="button"
@@ -675,6 +847,12 @@ export function TurfMap({
             aria-pressed={styleUrl === s.url} onClick={() => switchStyle(s.url)}
           >{s.label}</button>
         ))}
+        <span className="map-switcher-divider" aria-hidden="true" />
+        <button type="button"
+          className={"map-switcher-btn" + (precinctsOn ? " active" : "")}
+          aria-pressed={precinctsOn} onClick={togglePrecincts}
+          title="Show official Broward precinct boundaries (2026)"
+        >Precincts</button>
       </div>
 
       {/* Legend */}
